@@ -1,0 +1,7 @@
+/* Untitled — import this once, from the app's root stylesheet or entry.
+ * Generated from design-system.ds; regenerate rather than editing. */
+
+@import './fonts.css';
+@import './tokens/index.css';
+@import './tokens/motion.css';
+@import './panels.css';

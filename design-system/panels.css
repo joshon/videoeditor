@@ -1,0 +1,157 @@
+
+/* Panel styles */
+.panel {
+  padding: 4px 4px;
+  border-radius: 1.25rem;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.panel-default {
+  background: oklch(100% 0 0);
+  color: oklch(22.41% 0 none);
+  border: 1px solid oklch(22.41% 0 none);
+  box-shadow: 0em 0.708em 1.417em 0em rgba(0, 0, 0, 0.15);
+}
+
+[data-mode="1"] .panel-default {
+  background: oklch(100% 0 0);
+  color: oklch(22.41% 0 none);
+  border: 1px solid oklch(22.41% 0 none);
+  box-shadow: 0em 0.708em 1.417em 0em rgba(0, 0, 0, 0.15);
+}
+
+.dark .panel-default,
+[data-mode="2"] .panel-default {
+  background: oklch(29.74% 0 none);
+  color: oklch(100% 0 0);
+  border: none;
+  box-shadow: none;
+}
+
+.panel-card {
+  background: oklch(100% 0 0);
+  color: oklch(44.4% 0 none);
+  padding: 14px 14px;
+  border-radius: 1.25rem;
+  border: 1px solid oklch(81.03% 0 none);
+  box-shadow: 0em 1em 2em 0em rgba(0, 0, 0, 0.15);
+}
+
+[data-mode="1"] .panel-card {
+  background: oklch(100% 0 0);
+  color: oklch(44.4% 0 none);
+  border: 1px solid oklch(81.03% 0 none);
+  box-shadow: 0em 1em 2em 0em rgba(0, 0, 0, 0.15);
+}
+
+.dark .panel-card,
+[data-mode="2"] .panel-card {
+  background: oklch(37.07% 0 none);
+  color: oklch(100% 0 0);
+  border: none;
+  box-shadow: none;
+}
+
+.panel-section {
+  background: oklch(95.69% 0 none);
+  color: oklch(29.74% 0 none);
+  padding: 14px 14px;
+  border-radius: 1.25rem;
+}
+
+[data-mode="1"] .panel-section {
+  background: oklch(95.69% 0 none);
+  color: oklch(29.74% 0 none);
+}
+
+.dark .panel-section,
+[data-mode="2"] .panel-section {
+  background: oklch(29.74% 0 none);
+  color: oklch(95.69% 0 none);
+  border: none;
+  box-shadow: none;
+}
+
+.panel-card_on_section {
+  background: oklch(100% 0 0);
+  color: oklch(0% 0 0);
+  padding: 10px 10px;
+  border-radius: 0.25rem;
+}
+
+[data-mode="1"] .panel-card_on_section {
+  background: oklch(100% 0 0);
+  color: oklch(0% 0 0);
+}
+
+.dark .panel-card_on_section,
+[data-mode="2"] .panel-card_on_section {
+  background: oklch(0% 0 0);
+  color: oklch(100% 0 0);
+  border: none;
+  box-shadow: none;
+}
+
+.panel-main {
+  background: oklch(100% 0 0);
+  color: oklch(22.41% 0 none);
+  padding: 18px 18px;
+  border-radius: 1rem;
+}
+
+[data-mode="1"] .panel-main {
+  background: oklch(100% 0 0);
+  color: oklch(22.41% 0 none);
+}
+
+.dark .panel-main,
+[data-mode="2"] .panel-main {
+  background: oklch(0% 0 0);
+  color: oklch(100% 0 0);
+  border: none;
+  box-shadow: none;
+}
+
+.panel-raised {
+  background: oklch(100% 0 0);
+  color: oklch(44.4% 0 none);
+  border: 1px solid oklch(81.03% 0 none);
+  box-shadow: 0em 1em 2em 0em rgba(0, 0, 0, 0.15);
+}
+
+[data-mode="1"] .panel-raised {
+  background: oklch(100% 0 0);
+  color: oklch(44.4% 0 none);
+  border: 1px solid oklch(81.03% 0 none);
+  box-shadow: 0em 1em 2em 0em rgba(0, 0, 0, 0.15);
+}
+
+.dark .panel-raised,
+[data-mode="2"] .panel-raised {
+  background: oklch(37.07% 0 none);
+  color: oklch(100% 0 0);
+  border: none;
+  box-shadow: none;
+}
+
+.panel-plot {
+  background: oklch(100% 0 0);
+  color: oklch(29.74% 0 none);
+  padding: 10px 10px;
+  border: 1px solid oklch(81.03% 0 none);
+}
+
+[data-mode="1"] .panel-plot {
+  background: oklch(100% 0 0);
+  color: oklch(29.74% 0 none);
+  border: 1px solid oklch(81.03% 0 none);
+}
+
+.dark .panel-plot,
+[data-mode="2"] .panel-plot {
+  background: oklch(29.74% 0 none);
+  color: oklch(95.69% 0 none);
+  border: 1px solid oklch(44.4% 0 none);
+  box-shadow: none;
+}
+

@@ -1,0 +1,19 @@
+{
+  "name": "cutroom",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Simple local video editor — Next.js UI, projects saved to disk, ffmpeg-powered scrubbing and export",
+  "scripts": {
+    "dev": "PORT=4700 node server.js",
+    "build": "next build",
+    "start": "NODE_ENV=production PORT=4700 node server.js"
+  },
+  "engines": {
+    "node": ">=20.9"
+  },
+  "dependencies": {
+    "next": "^16.4.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  }
+}

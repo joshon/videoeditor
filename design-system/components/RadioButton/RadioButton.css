@@ -1,0 +1,211 @@
+/* ===========================================
+   RadioButton Component Styles - CSS-First
+   Uses CSS variables for all colors
+   Native CSS selectors for state changes
+   =========================================== */
+
+[data-mode="1"] {
+  --radio-disabled-bg-override: oklch(81.03% 0 none);
+  --radio-disabled-dot-override: oklch(51.72% 0 none);
+}
+
+[data-mode="2"] {
+  --radio-disabled-bg-override: oklch(37.07% 0 none);
+  --radio-disabled-dot-override: oklch(59.05% 0 none);
+}
+
+:root {
+  --radio-off-bg: var(--cb-ui-bg);
+  --radio-off-bg-hover: var(--cb-ui-bg-hover, var(--cb-ui-bg));
+  --radio-off-bg-active: var(--cb-ui-bg-active, var(--cb-ui-bg-hover, var(--cb-ui-bg)));
+  --radio-off-bg-disabled: var(--cb-ui-bg-disabled, var(--cb-ui-bg));
+  --radio-off-border: var(--cb-ui-border, transparent);
+  --radio-off-shadow: var(--cb-ui-shadow, none);
+  --radio-off-shadow-hover: var(--cb-ui-shadow-hover, var(--cb-ui-shadow, none));
+  --radio-off-shadow-active: var(--cb-ui-shadow-active, var(--cb-ui-shadow-hover, var(--cb-ui-shadow, none)));
+
+  --radio-on-bg: var(--cb-brand-bg);
+  --radio-on-bg-hover: var(--cb-brand-bg-hover, var(--cb-brand-bg));
+  --radio-on-bg-active: var(--cb-brand-bg-active, var(--cb-brand-bg-hover, var(--cb-brand-bg)));
+  --radio-on-bg-disabled: var(--cb-brand-bg-disabled, var(--cb-brand-bg));
+  --radio-on-dot: var(--cb-brand-text);
+  --radio-on-border: var(--cb-brand-border, transparent);
+  --radio-on-shadow: var(--cb-brand-shadow, none);
+  --radio-on-shadow-hover: var(--cb-brand-shadow-hover, var(--cb-brand-shadow, none));
+  --radio-on-shadow-active: var(--cb-brand-shadow-active, var(--cb-brand-shadow-hover, var(--cb-brand-shadow, none)));
+
+  --radio-focus-ring: oklch(72.27% 0.19 149.58deg);
+}
+
+/* Radio variables for mode: light */
+[data-mode="1"] {
+  --radio-off-bg: var(--cb-ui-bg);
+  --radio-off-bg-hover: var(--cb-ui-bg-hover, var(--cb-ui-bg));
+  --radio-off-bg-active: var(--cb-ui-bg-active, var(--cb-ui-bg-hover, var(--cb-ui-bg)));
+  --radio-off-bg-disabled: var(--cb-ui-bg-disabled, var(--cb-ui-bg));
+  --radio-off-border: var(--cb-ui-border, transparent);
+  --radio-off-shadow: var(--cb-ui-shadow, none);
+  --radio-off-shadow-hover: var(--cb-ui-shadow-hover, var(--cb-ui-shadow, none));
+  --radio-off-shadow-active: var(--cb-ui-shadow-active, var(--cb-ui-shadow-hover, var(--cb-ui-shadow, none)));
+
+  --radio-on-bg: var(--cb-brand-bg);
+  --radio-on-bg-hover: var(--cb-brand-bg-hover, var(--cb-brand-bg));
+  --radio-on-bg-active: var(--cb-brand-bg-active, var(--cb-brand-bg-hover, var(--cb-brand-bg)));
+  --radio-on-bg-disabled: var(--cb-brand-bg-disabled, var(--cb-brand-bg));
+  --radio-on-dot: var(--cb-brand-text);
+  --radio-on-border: var(--cb-brand-border, transparent);
+  --radio-on-shadow: var(--cb-brand-shadow, none);
+  --radio-on-shadow-hover: var(--cb-brand-shadow-hover, var(--cb-brand-shadow, none));
+  --radio-on-shadow-active: var(--cb-brand-shadow-active, var(--cb-brand-shadow-hover, var(--cb-brand-shadow, none)));
+
+  --radio-focus-ring: oklch(72.27% 0.19 149.58deg);
+}
+
+/* Radio variables for mode: dark */
+[data-mode="2"] {
+  --radio-off-bg: var(--cb-ui-bg);
+  --radio-off-bg-hover: var(--cb-ui-bg-hover, var(--cb-ui-bg));
+  --radio-off-bg-active: var(--cb-ui-bg-active, var(--cb-ui-bg-hover, var(--cb-ui-bg)));
+  --radio-off-bg-disabled: var(--cb-ui-bg-disabled, var(--cb-ui-bg));
+  --radio-off-border: var(--cb-ui-border, transparent);
+  --radio-off-shadow: var(--cb-ui-shadow, none);
+  --radio-off-shadow-hover: var(--cb-ui-shadow-hover, var(--cb-ui-shadow, none));
+  --radio-off-shadow-active: var(--cb-ui-shadow-active, var(--cb-ui-shadow-hover, var(--cb-ui-shadow, none)));
+
+  --radio-on-bg: var(--cb-brand-bg);
+  --radio-on-bg-hover: var(--cb-brand-bg-hover, var(--cb-brand-bg));
+  --radio-on-bg-active: var(--cb-brand-bg-active, var(--cb-brand-bg-hover, var(--cb-brand-bg)));
+  --radio-on-bg-disabled: var(--cb-brand-bg-disabled, var(--cb-brand-bg));
+  --radio-on-dot: var(--cb-brand-text);
+  --radio-on-border: var(--cb-brand-border, transparent);
+  --radio-on-shadow: var(--cb-brand-shadow, none);
+  --radio-on-shadow-hover: var(--cb-brand-shadow-hover, var(--cb-brand-shadow, none));
+  --radio-on-shadow-active: var(--cb-brand-shadow-active, var(--cb-brand-shadow-hover, var(--cb-brand-shadow, none)));
+
+  --radio-focus-ring: oklch(72.27% 0.19 149.58deg);
+}
+
+.radio-container {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+
+.radio-label-left {
+  flex-direction: row-reverse;
+}
+
+.radio-label-top {
+  flex-direction: column-reverse;
+  align-items: flex-start;
+}
+
+.radio-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.radio-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-sizing: border-box;
+  background: var(--radio-off-bg);
+  border: 1px solid var(--radio-off-border);
+  box-shadow: var(--radio-off-shadow);
+  border-radius: 9999px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.radio-dot {
+  background: var(--radio-on-dot);
+  border-radius: 9999px;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all 0.2s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.radio-container:hover .radio-circle {
+  background: var(--radio-off-bg-hover);
+  box-shadow: var(--radio-off-shadow-hover);
+}
+
+.radio-input:checked + .radio-circle {
+  background: var(--radio-on-bg);
+  border-color: var(--radio-on-border);
+  box-shadow: var(--radio-on-shadow);
+}
+
+.radio-input:checked + .radio-circle .radio-dot {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.radio-container:hover .radio-input:checked + .radio-circle {
+  background: var(--radio-on-bg-hover);
+  box-shadow: var(--radio-on-shadow-hover);
+}
+
+.radio-input:disabled + .radio-circle {
+  background: var(--radio-disabled-bg-override, var(--radio-off-bg-disabled));
+  border-color: var(--radio-disabled-border-override, var(--radio-off-border));
+  cursor: not-allowed;
+}
+
+.radio-input:disabled:checked + .radio-circle {
+  background: var(--radio-disabled-bg-override, var(--radio-on-bg-disabled));
+  border-color: var(--radio-disabled-border-override, var(--radio-on-border));
+}
+
+.radio-input:disabled:checked + .radio-circle .radio-dot {
+  background: var(--radio-disabled-dot-override, var(--radio-on-dot));
+}
+
+.radio-container:has(.radio-input:disabled) {
+  cursor: not-allowed;
+}
+
+.radio-input:focus-visible + .radio-circle {
+  outline: 1.25px solid var(--radio-focus-ring);
+  outline-offset: 1.25px;
+}
+
+/* Size: medium */
+.radio-medium .radio-circle {
+  width: 1rem;
+  height: 1rem;
+  border-width: 1px;
+}
+
+.radio-medium .radio-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+}
+
+.radio-medium {
+  gap: 6px;
+}
+
+.radio-medium .radio-label {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  font-family: var(--typography-body-medium-font-family);
+}
+
+.radio-medium.radio-label-left .radio-label {
+  width: 5rem;
+  flex: 0 0 5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}

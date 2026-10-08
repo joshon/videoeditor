@@ -1,0 +1,22 @@
+/* Surface Component Styles */
+/* Generated from Design System */
+/* Note: Colors are applied inline for N-modes support */
+
+.surface {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.padding-none { padding: 0; }
+.padding-small { padding: var(--spacing-xs, 8px); }
+.padding-medium { padding: var(--spacing-md, 16px); }
+.padding-large { padding: var(--spacing-xl, 24px); }
+
+.rounded-none { border-radius: 0; }
+.rounded-small { border-radius: var(--radius-sm, 4px); }
+.rounded-medium { border-radius: var(--radius-md, 8px); }
+.rounded-large { border-radius: var(--radius-lg, 12px); }
+.rounded-full { border-radius: 9999px; }
+
+.shadow {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}

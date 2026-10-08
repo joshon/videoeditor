@@ -1,0 +1,341 @@
+/* ===========================================
+   Typography Tokens - Generated from Design System
+   =========================================== */
+
+:root {
+  /* Font Families */
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "Roboto Mono", system-ui, sans-serif;
+
+  /* Typography Scales */
+  /* Display */
+  --typography-display-large-font-family: "Inter", system-ui, sans-serif;
+  --typography-display-large-font-size: 72px;
+  --typography-display-large-font-weight: 700;
+  --typography-display-large-line-height: 1.7;
+  --typography-display-large-letter-spacing: -0.04em;
+  --typography-display-medium-font-family: "Inter", system-ui, sans-serif;
+  --typography-display-medium-font-size: 48px;
+  --typography-display-medium-font-weight: 700;
+  --typography-display-medium-line-height: 1.6;
+  --typography-display-medium-letter-spacing: -0.04em;
+  --typography-display-small-font-family: "Inter", system-ui, sans-serif;
+  --typography-display-small-font-size: 36px;
+  --typography-display-small-font-weight: 700;
+  --typography-display-small-line-height: 1.5;
+  --typography-display-small-letter-spacing: -0.04em;
+
+  /* Headers */
+  --typography-headers-h1-font-family: "Inter", system-ui, sans-serif;
+  --typography-headers-h1-font-size: 28px;
+  --typography-headers-h1-font-weight: 700;
+  --typography-headers-h1-line-height: 1.5;
+  --typography-headers-h1-letter-spacing: -0.03em;
+  --typography-headers-h2-font-family: "Inter", system-ui, sans-serif;
+  --typography-headers-h2-font-size: 24px;
+  --typography-headers-h2-font-weight: 700;
+  --typography-headers-h2-line-height: 1.4;
+  --typography-headers-h2-letter-spacing: -0.03em;
+  --typography-headers-h3-font-family: "Inter", system-ui, sans-serif;
+  --typography-headers-h3-font-size: 20px;
+  --typography-headers-h3-font-weight: 600;
+  --typography-headers-h3-line-height: 1.3;
+  --typography-headers-h3-letter-spacing: -0.03em;
+  --typography-headers-h4-font-family: "Inter", system-ui, sans-serif;
+  --typography-headers-h4-font-size: 16px;
+  --typography-headers-h4-font-weight: 600;
+  --typography-headers-h4-line-height: 1.2;
+  --typography-headers-h4-letter-spacing: -0.03em;
+  --typography-headers-h5-font-family: "Inter", system-ui, sans-serif;
+  --typography-headers-h5-font-size: 14px;
+  --typography-headers-h5-font-weight: 600;
+  --typography-headers-h5-line-height: 1.2;
+  --typography-headers-h5-letter-spacing: -0.03em;
+  --typography-headers-h6-font-family: "Inter", system-ui, sans-serif;
+  --typography-headers-h6-font-size: 12px;
+  --typography-headers-h6-font-weight: 600;
+  --typography-headers-h6-line-height: 1.2;
+  --typography-headers-h6-letter-spacing: -0.03em;
+
+  /* Body */
+  --typography-body-large-font-family: "Inter", system-ui, sans-serif;
+  --typography-body-large-font-size: 14px;
+  --typography-body-large-font-weight: 400;
+  --typography-body-large-line-height: 1.3;
+  --typography-body-large-letter-spacing: -0.03em;
+  --typography-body-medium-font-family: "Inter", system-ui, sans-serif;
+  --typography-body-medium-font-size: 12px;
+  --typography-body-medium-font-weight: 400;
+  --typography-body-medium-line-height: 1.2;
+  --typography-body-medium-letter-spacing: -0.03em;
+  --typography-body-small-font-family: "Inter", system-ui, sans-serif;
+  --typography-body-small-font-size: 10px;
+  --typography-body-small-font-weight: 400;
+  --typography-body-small-line-height: 1.2;
+  --typography-body-small-letter-spacing: -0.03em;
+
+  /* Ui */
+  --typography-ui-large-font-family: "Inter", system-ui, sans-serif;
+  --typography-ui-large-font-size: 14px;
+  --typography-ui-large-font-weight: 500;
+  --typography-ui-large-line-height: 1.3;
+  --typography-ui-large-letter-spacing: -0.02em;
+  --typography-ui-medium-font-family: "Inter", system-ui, sans-serif;
+  --typography-ui-medium-font-size: 12px;
+  --typography-ui-medium-font-weight: 500;
+  --typography-ui-medium-line-height: 1.2;
+  --typography-ui-medium-letter-spacing: -0.02em;
+  --typography-ui-small-font-family: "Inter", system-ui, sans-serif;
+  --typography-ui-small-font-size: 10px;
+  --typography-ui-small-font-weight: 500;
+  --typography-ui-small-line-height: 1.2;
+  --typography-ui-small-letter-spacing: -0.02em;
+
+  /* Code */
+  --typography-code-large-font-family: "Roboto Mono", system-ui, sans-serif;
+  --typography-code-large-font-size: 14px;
+  --typography-code-large-font-weight: 400;
+  --typography-code-large-line-height: 1.3;
+  --typography-code-large-letter-spacing: -0.02em;
+  --typography-code-medium-font-family: "Roboto Mono", system-ui, sans-serif;
+  --typography-code-medium-font-size: 12px;
+  --typography-code-medium-font-weight: 400;
+  --typography-code-medium-line-height: 1.2;
+  --typography-code-medium-letter-spacing: -0.02em;
+  --typography-code-small-font-family: "Roboto Mono", system-ui, sans-serif;
+  --typography-code-small-font-size: 10px;
+  --typography-code-small-font-weight: 400;
+  --typography-code-small-line-height: 1.2;
+  --typography-code-small-letter-spacing: -0.02em;
+
+  /* Labels */
+  --typography-labels-large-font-family: "Inter", system-ui, sans-serif;
+  --typography-labels-large-font-size: 12px;
+  --typography-labels-large-font-weight: 500;
+  --typography-labels-large-line-height: 1.2;
+  --typography-labels-large-letter-spacing: -0.03em;
+  --typography-labels-medium-font-family: "Inter", system-ui, sans-serif;
+  --typography-labels-medium-font-size: 10px;
+  --typography-labels-medium-font-weight: 500;
+  --typography-labels-medium-line-height: 1.2;
+  --typography-labels-medium-letter-spacing: -0.03em;
+  --typography-labels-small-font-family: "Inter", system-ui, sans-serif;
+  --typography-labels-small-font-size: 8px;
+  --typography-labels-small-font-weight: 500;
+  --typography-labels-small-line-height: 1.2;
+  --typography-labels-small-letter-spacing: -0.03em;
+
+  /* Eyebrow */
+  --typography-eyebrow-large-font-family: "Inter", system-ui, sans-serif;
+  --typography-eyebrow-large-font-size: 12px;
+  --typography-eyebrow-large-font-weight: 600;
+  --typography-eyebrow-large-line-height: 1.2;
+  --typography-eyebrow-large-letter-spacing: -0.04em;
+  --typography-eyebrow-medium-font-family: "Inter", system-ui, sans-serif;
+  --typography-eyebrow-medium-font-size: 10px;
+  --typography-eyebrow-medium-font-weight: 600;
+  --typography-eyebrow-medium-line-height: 1.2;
+  --typography-eyebrow-medium-letter-spacing: -0.04em;
+  --typography-eyebrow-small-font-family: "Inter", system-ui, sans-serif;
+  --typography-eyebrow-small-font-size: 8px;
+  --typography-eyebrow-small-font-weight: 600;
+  --typography-eyebrow-small-line-height: 1.2;
+  --typography-eyebrow-small-letter-spacing: -0.04em;
+
+}
+
+/* Typography Utility Classes */
+.text-display-large {
+  font-family: var(--typography-display-large-font-family);
+  font-size: var(--typography-display-large-font-size);
+  font-weight: var(--typography-display-large-font-weight);
+  line-height: var(--typography-display-large-line-height);
+  letter-spacing: var(--typography-display-large-letter-spacing);
+}
+
+.text-display-medium {
+  font-family: var(--typography-display-medium-font-family);
+  font-size: var(--typography-display-medium-font-size);
+  font-weight: var(--typography-display-medium-font-weight);
+  line-height: var(--typography-display-medium-line-height);
+  letter-spacing: var(--typography-display-medium-letter-spacing);
+}
+
+.text-display-small {
+  font-family: var(--typography-display-small-font-family);
+  font-size: var(--typography-display-small-font-size);
+  font-weight: var(--typography-display-small-font-weight);
+  line-height: var(--typography-display-small-line-height);
+  letter-spacing: var(--typography-display-small-letter-spacing);
+}
+
+.text-headers-h1 {
+  font-family: var(--typography-headers-h1-font-family);
+  font-size: var(--typography-headers-h1-font-size);
+  font-weight: var(--typography-headers-h1-font-weight);
+  line-height: var(--typography-headers-h1-line-height);
+  letter-spacing: var(--typography-headers-h1-letter-spacing);
+}
+
+.text-headers-h2 {
+  font-family: var(--typography-headers-h2-font-family);
+  font-size: var(--typography-headers-h2-font-size);
+  font-weight: var(--typography-headers-h2-font-weight);
+  line-height: var(--typography-headers-h2-line-height);
+  letter-spacing: var(--typography-headers-h2-letter-spacing);
+}
+
+.text-headers-h3 {
+  font-family: var(--typography-headers-h3-font-family);
+  font-size: var(--typography-headers-h3-font-size);
+  font-weight: var(--typography-headers-h3-font-weight);
+  line-height: var(--typography-headers-h3-line-height);
+  letter-spacing: var(--typography-headers-h3-letter-spacing);
+}
+
+.text-headers-h4 {
+  font-family: var(--typography-headers-h4-font-family);
+  font-size: var(--typography-headers-h4-font-size);
+  font-weight: var(--typography-headers-h4-font-weight);
+  line-height: var(--typography-headers-h4-line-height);
+  letter-spacing: var(--typography-headers-h4-letter-spacing);
+}
+
+.text-headers-h5 {
+  font-family: var(--typography-headers-h5-font-family);
+  font-size: var(--typography-headers-h5-font-size);
+  font-weight: var(--typography-headers-h5-font-weight);
+  line-height: var(--typography-headers-h5-line-height);
+  letter-spacing: var(--typography-headers-h5-letter-spacing);
+}
+
+.text-headers-h6 {
+  font-family: var(--typography-headers-h6-font-family);
+  font-size: var(--typography-headers-h6-font-size);
+  font-weight: var(--typography-headers-h6-font-weight);
+  line-height: var(--typography-headers-h6-line-height);
+  letter-spacing: var(--typography-headers-h6-letter-spacing);
+}
+
+.text-body-large {
+  font-family: var(--typography-body-large-font-family);
+  font-size: var(--typography-body-large-font-size);
+  font-weight: var(--typography-body-large-font-weight);
+  line-height: var(--typography-body-large-line-height);
+  letter-spacing: var(--typography-body-large-letter-spacing);
+}
+
+.text-body-medium {
+  font-family: var(--typography-body-medium-font-family);
+  font-size: var(--typography-body-medium-font-size);
+  font-weight: var(--typography-body-medium-font-weight);
+  line-height: var(--typography-body-medium-line-height);
+  letter-spacing: var(--typography-body-medium-letter-spacing);
+}
+
+.text-body-small {
+  font-family: var(--typography-body-small-font-family);
+  font-size: var(--typography-body-small-font-size);
+  font-weight: var(--typography-body-small-font-weight);
+  line-height: var(--typography-body-small-line-height);
+  letter-spacing: var(--typography-body-small-letter-spacing);
+}
+
+.text-ui-large {
+  font-family: var(--typography-ui-large-font-family);
+  font-size: var(--typography-ui-large-font-size);
+  font-weight: var(--typography-ui-large-font-weight);
+  line-height: var(--typography-ui-large-line-height);
+  letter-spacing: var(--typography-ui-large-letter-spacing);
+}
+
+.text-ui-medium {
+  font-family: var(--typography-ui-medium-font-family);
+  font-size: var(--typography-ui-medium-font-size);
+  font-weight: var(--typography-ui-medium-font-weight);
+  line-height: var(--typography-ui-medium-line-height);
+  letter-spacing: var(--typography-ui-medium-letter-spacing);
+}
+
+.text-ui-small {
+  font-family: var(--typography-ui-small-font-family);
+  font-size: var(--typography-ui-small-font-size);
+  font-weight: var(--typography-ui-small-font-weight);
+  line-height: var(--typography-ui-small-line-height);
+  letter-spacing: var(--typography-ui-small-letter-spacing);
+}
+
+.text-code-large {
+  font-family: var(--typography-code-large-font-family);
+  font-size: var(--typography-code-large-font-size);
+  font-weight: var(--typography-code-large-font-weight);
+  line-height: var(--typography-code-large-line-height);
+  letter-spacing: var(--typography-code-large-letter-spacing);
+}
+
+.text-code-medium {
+  font-family: var(--typography-code-medium-font-family);
+  font-size: var(--typography-code-medium-font-size);
+  font-weight: var(--typography-code-medium-font-weight);
+  line-height: var(--typography-code-medium-line-height);
+  letter-spacing: var(--typography-code-medium-letter-spacing);
+}
+
+.text-code-small {
+  font-family: var(--typography-code-small-font-family);
+  font-size: var(--typography-code-small-font-size);
+  font-weight: var(--typography-code-small-font-weight);
+  line-height: var(--typography-code-small-line-height);
+  letter-spacing: var(--typography-code-small-letter-spacing);
+}
+
+.text-labels-large {
+  font-family: var(--typography-labels-large-font-family);
+  font-size: var(--typography-labels-large-font-size);
+  font-weight: var(--typography-labels-large-font-weight);
+  line-height: var(--typography-labels-large-line-height);
+  letter-spacing: var(--typography-labels-large-letter-spacing);
+}
+
+.text-labels-medium {
+  font-family: var(--typography-labels-medium-font-family);
+  font-size: var(--typography-labels-medium-font-size);
+  font-weight: var(--typography-labels-medium-font-weight);
+  line-height: var(--typography-labels-medium-line-height);
+  letter-spacing: var(--typography-labels-medium-letter-spacing);
+}
+
+.text-labels-small {
+  font-family: var(--typography-labels-small-font-family);
+  font-size: var(--typography-labels-small-font-size);
+  font-weight: var(--typography-labels-small-font-weight);
+  line-height: var(--typography-labels-small-line-height);
+  letter-spacing: var(--typography-labels-small-letter-spacing);
+}
+
+.text-eyebrow-large {
+  font-family: var(--typography-eyebrow-large-font-family);
+  font-size: var(--typography-eyebrow-large-font-size);
+  font-weight: var(--typography-eyebrow-large-font-weight);
+  line-height: var(--typography-eyebrow-large-line-height);
+  letter-spacing: var(--typography-eyebrow-large-letter-spacing);
+  text-transform: uppercase;
+}
+
+.text-eyebrow-medium {
+  font-family: var(--typography-eyebrow-medium-font-family);
+  font-size: var(--typography-eyebrow-medium-font-size);
+  font-weight: var(--typography-eyebrow-medium-font-weight);
+  line-height: var(--typography-eyebrow-medium-line-height);
+  letter-spacing: var(--typography-eyebrow-medium-letter-spacing);
+  text-transform: uppercase;
+}
+
+.text-eyebrow-small {
+  font-family: var(--typography-eyebrow-small-font-family);
+  font-size: var(--typography-eyebrow-small-font-size);
+  font-weight: var(--typography-eyebrow-small-font-weight);
+  line-height: var(--typography-eyebrow-small-line-height);
+  letter-spacing: var(--typography-eyebrow-small-letter-spacing);
+  text-transform: uppercase;
+}

@@ -1,0 +1,80 @@
+/* ===========================================
+   Size Tokens - Generated from Design System
+   =========================================== */
+
+:root {
+  /* Spacing */
+  --spacing-none: 0px;
+  --spacing-5xs: 1px;
+  --spacing-4xs: 2px;
+  --spacing-3xs: 4px;
+  --spacing-2xs: 6px;
+  --spacing-xs: 8px;
+  --spacing-sm: 10px;
+  --spacing-md: 12px;
+  --spacing-lg: 14px;
+  --spacing-xl: 16px;
+  --spacing-2xl: 18px;
+  --spacing-3xl: 24px;
+  --spacing-4xl: 36px;
+  --spacing-5xl: 48px;
+  --spacing-negative-1: -1px;
+  --spacing-untitled: 0rem;
+
+  /* Border Radius */
+  --radius-none: 0px;
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.5rem;
+  --radius-4xl: 1.75rem;
+  --radius-5xl: 2rem;
+  --radius-full: 9999px;
+
+  /* Border Widths */
+  --border-none: 0px;
+  --border-sm: 1px;
+  --border-md-sm: 1.25px;
+  --border-md: 2px;
+  --border-lg: 3px;
+
+  /* Heights */
+  --height-3xs: 0.5rem;
+  --height-2xs: 1rem;
+  --height-xs: 1.5rem;
+  --height-sm: 2rem;
+  --height-md: 3rem;
+  --height-lg: 4rem;
+  --height-xl: 5rem;
+  --height-2xl: 6rem;
+  --height-3xl: 7rem;
+  --height-10xl: 25rem;
+  --height-15xl: 35rem;
+
+  /* Widths */
+  --width-xs: 5rem;
+  --width-sm: 10rem;
+  --width-md: 15rem;
+  --width-lg: 20rem;
+  --width-xl: 25rem;
+  --width-2xl: 30rem;
+  --width-3xl: 35rem;
+  --width-none: 0rem;
+  --width-4xl: 40rem;
+
+  /* Icon Sizes */
+  --icon-none: 0rem;
+  --icon-2xs: 0.25rem;
+  --icon-xs: 0.5rem;
+  --icon-sm: 0.75rem;
+  --icon-md: 1rem;
+  --icon-lg: 1.25rem;
+  --icon-xl: 1.5rem;
+  --icon-2xl: 1.75rem;
+  --icon-3xl: 2rem;
+  --icon-4xl: 2.25rem;
+  --icon-5xl: 2.5rem;
+}

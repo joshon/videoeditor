@@ -1,0 +1,243 @@
+/* ===========================================
+   Toggle Component Styles - CSS-First
+   Uses CSS variables for all colors
+   Native CSS selectors for state changes
+   =========================================== */
+
+/* Toggle component disabled color overrides for mode: light */
+[data-mode="1"] {
+  --toggle-disabled-bg-override: oklch(81.03% 0 none);
+  --toggle-disabled-thumb-override: oklch(51.72% 0 none);
+}
+
+/* Toggle component disabled color overrides for mode: dark */
+[data-mode="2"] {
+  --toggle-disabled-bg-override: oklch(37.07% 0 none);
+  --toggle-disabled-thumb-override: oklch(59.05% 0 none);
+}
+
+:root {
+  --toggle-off-bg: var(--cb-ui-bg);
+  --toggle-off-bg-hover: var(--cb-ui-bg-hover, var(--cb-ui-bg));
+  --toggle-off-bg-active: var(--cb-ui-bg-active, var(--cb-ui-bg-hover, var(--cb-ui-bg)));
+  --toggle-off-bg-disabled: var(--toggle-disabled-bg-override, var(--cb-ui-bg-disabled, var(--cb-ui-bg)));
+  --toggle-off-thumb: var(--cb-ui-text);
+  --toggle-off-thumb-disabled: var(--toggle-disabled-thumb-override, var(--cb-ui-text-disabled, var(--cb-ui-text)));
+  --toggle-off-border: var(--cb-ui-border, transparent);
+  --toggle-off-shadow: var(--cb-ui-shadow, none);
+  --toggle-off-shadow-hover: var(--cb-ui-shadow-hover, var(--cb-ui-shadow, none));
+  --toggle-off-shadow-active: var(--cb-ui-shadow-active, var(--cb-ui-shadow-hover, var(--cb-ui-shadow, none)));
+
+  --toggle-on-bg: var(--cb-brand-bg);
+  --toggle-on-bg-hover: var(--cb-brand-bg-hover, var(--cb-brand-bg));
+  --toggle-on-bg-active: var(--cb-brand-bg-active, var(--cb-brand-bg-hover, var(--cb-brand-bg)));
+  --toggle-on-bg-disabled: var(--toggle-disabled-bg-override, var(--cb-brand-bg-disabled, var(--cb-brand-bg)));
+  --toggle-on-thumb: var(--cb-brand-text);
+  --toggle-on-thumb-disabled: var(--toggle-disabled-thumb-override, var(--cb-brand-text-disabled, var(--cb-brand-text)));
+  --toggle-on-border: var(--cb-brand-border, transparent);
+  --toggle-on-shadow: var(--cb-brand-shadow, none);
+  --toggle-on-shadow-hover: var(--cb-brand-shadow-hover, var(--cb-brand-shadow, none));
+  --toggle-on-shadow-active: var(--cb-brand-shadow-active, var(--cb-brand-shadow-hover, var(--cb-brand-shadow, none)));
+
+  --toggle-focus-ring: oklch(72.27% 0.19 149.58deg);
+  --toggle-transition: 0.2s ease-in-out;
+}
+
+/* Toggle variables for mode: light */
+[data-mode="1"] {
+  --toggle-off-bg: var(--cb-ui-bg);
+  --toggle-off-bg-hover: var(--cb-ui-bg-hover, var(--cb-ui-bg));
+  --toggle-off-bg-active: var(--cb-ui-bg-active, var(--cb-ui-bg-hover, var(--cb-ui-bg)));
+  --toggle-off-bg-disabled: var(--toggle-disabled-bg-override, var(--cb-ui-bg-disabled, var(--cb-ui-bg)));
+  --toggle-off-thumb: var(--cb-ui-text);
+  --toggle-off-thumb-disabled: var(--toggle-disabled-thumb-override, var(--cb-ui-text-disabled, var(--cb-ui-text)));
+  --toggle-off-border: var(--cb-ui-border, transparent);
+  --toggle-off-shadow: var(--cb-ui-shadow, none);
+  --toggle-off-shadow-hover: var(--cb-ui-shadow-hover, var(--cb-ui-shadow, none));
+  --toggle-off-shadow-active: var(--cb-ui-shadow-active, var(--cb-ui-shadow-hover, var(--cb-ui-shadow, none)));
+
+  --toggle-on-bg: var(--cb-brand-bg);
+  --toggle-on-bg-hover: var(--cb-brand-bg-hover, var(--cb-brand-bg));
+  --toggle-on-bg-active: var(--cb-brand-bg-active, var(--cb-brand-bg-hover, var(--cb-brand-bg)));
+  --toggle-on-bg-disabled: var(--toggle-disabled-bg-override, var(--cb-brand-bg-disabled, var(--cb-brand-bg)));
+  --toggle-on-thumb: var(--cb-brand-text);
+  --toggle-on-thumb-disabled: var(--toggle-disabled-thumb-override, var(--cb-brand-text-disabled, var(--cb-brand-text)));
+  --toggle-on-border: var(--cb-brand-border, transparent);
+  --toggle-on-shadow: var(--cb-brand-shadow, none);
+  --toggle-on-shadow-hover: var(--cb-brand-shadow-hover, var(--cb-brand-shadow, none));
+  --toggle-on-shadow-active: var(--cb-brand-shadow-active, var(--cb-brand-shadow-hover, var(--cb-brand-shadow, none)));
+}
+
+/* Toggle variables for mode: dark */
+[data-mode="2"] {
+  --toggle-off-bg: var(--cb-ui-bg);
+  --toggle-off-bg-hover: var(--cb-ui-bg-hover, var(--cb-ui-bg));
+  --toggle-off-bg-active: var(--cb-ui-bg-active, var(--cb-ui-bg-hover, var(--cb-ui-bg)));
+  --toggle-off-bg-disabled: var(--toggle-disabled-bg-override, var(--cb-ui-bg-disabled, var(--cb-ui-bg)));
+  --toggle-off-thumb: var(--cb-ui-text);
+  --toggle-off-thumb-disabled: var(--toggle-disabled-thumb-override, var(--cb-ui-text-disabled, var(--cb-ui-text)));
+  --toggle-off-border: var(--cb-ui-border, transparent);
+  --toggle-off-shadow: var(--cb-ui-shadow, none);
+  --toggle-off-shadow-hover: var(--cb-ui-shadow-hover, var(--cb-ui-shadow, none));
+  --toggle-off-shadow-active: var(--cb-ui-shadow-active, var(--cb-ui-shadow-hover, var(--cb-ui-shadow, none)));
+
+  --toggle-on-bg: var(--cb-brand-bg);
+  --toggle-on-bg-hover: var(--cb-brand-bg-hover, var(--cb-brand-bg));
+  --toggle-on-bg-active: var(--cb-brand-bg-active, var(--cb-brand-bg-hover, var(--cb-brand-bg)));
+  --toggle-on-bg-disabled: var(--toggle-disabled-bg-override, var(--cb-brand-bg-disabled, var(--cb-brand-bg)));
+  --toggle-on-thumb: var(--cb-brand-text);
+  --toggle-on-thumb-disabled: var(--toggle-disabled-thumb-override, var(--cb-brand-text-disabled, var(--cb-brand-text)));
+  --toggle-on-border: var(--cb-brand-border, transparent);
+  --toggle-on-shadow: var(--cb-brand-shadow, none);
+  --toggle-on-shadow-hover: var(--cb-brand-shadow-hover, var(--cb-brand-shadow, none));
+  --toggle-on-shadow-active: var(--cb-brand-shadow-active, var(--cb-brand-shadow-hover, var(--cb-brand-shadow, none)));
+}
+
+.toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-label-left {
+  flex-direction: row-reverse;
+}
+
+.toggle-label-top {
+  flex-direction: column-reverse;
+  align-items: flex-start;
+}
+
+.toggle-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-track {
+  position: relative;
+  box-sizing: border-box;
+  border-radius: 9999px;
+  background: var(--toggle-off-bg);
+  border: 1px solid var(--toggle-off-border);
+  box-shadow: var(--toggle-off-shadow);
+  transition: background var(--toggle-transition), border-color var(--toggle-transition), box-shadow var(--toggle-transition);
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 50%;
+  border-radius: 9999px;
+  background: var(--toggle-off-thumb);
+  box-shadow: var(--toggle-knob-shadow, none);
+  transform: translateY(-50%) translateX(0);
+  transition: transform var(--toggle-transition), background var(--toggle-transition);
+  z-index: 1;
+}
+
+.toggle:hover .toggle-track {
+  background: var(--toggle-off-bg-hover);
+  box-shadow: var(--toggle-off-shadow-hover);
+}
+.toggle:active .toggle-track {
+  background: var(--toggle-off-bg-active);
+  box-shadow: var(--toggle-off-shadow-active);
+}
+
+.toggle-input:checked + .toggle-track {
+  background: var(--toggle-on-bg);
+  border-color: var(--toggle-on-border);
+  box-shadow: var(--toggle-on-shadow);
+}
+
+.toggle-input:checked + .toggle-track .toggle-thumb {
+  background: var(--toggle-on-thumb);
+}
+
+.toggle:hover .toggle-input:checked + .toggle-track {
+  background: var(--toggle-on-bg-hover);
+  box-shadow: var(--toggle-on-shadow-hover);
+}
+.toggle:active .toggle-input:checked + .toggle-track {
+  background: var(--toggle-on-bg-active);
+  box-shadow: var(--toggle-on-shadow-active);
+}
+
+.toggle-input:disabled + .toggle-track {
+  background: var(--toggle-off-bg-disabled);
+  border-color: var(--toggle-disabled-border-override, var(--toggle-off-border));
+  cursor: not-allowed;
+}
+
+.toggle-input:disabled + .toggle-track .toggle-thumb {
+  background: var(--toggle-off-thumb-disabled, var(--toggle-off-thumb));
+}
+
+.toggle-input:disabled:checked + .toggle-track {
+  background: var(--toggle-on-bg-disabled);
+  border-color: var(--toggle-disabled-border-override, var(--toggle-on-border));
+}
+
+.toggle-input:disabled:checked + .toggle-track .toggle-thumb {
+  background: var(--toggle-on-thumb-disabled, var(--toggle-on-thumb));
+}
+
+.toggle:has(.toggle-input:disabled) { cursor: not-allowed; }
+
+.toggle-input:focus-visible + .toggle-track {
+  outline: 1.25px solid var(--toggle-focus-ring);
+  outline-offset: 1.25px;
+}
+
+/* Size: medium */
+.toggle-medium {
+  gap: 6px;
+}
+
+.toggle-medium .toggle-track {
+  width: 1.60rem;
+  height: 1rem;
+}
+
+.toggle-medium .toggle-thumb {
+  width: 0.5rem;
+  height: 0.5rem;
+  left: 0.25rem;
+}
+
+.toggle-medium .toggle-input:checked + .toggle-track .toggle-thumb {
+  transform: translateY(-50%) translateX(0.60rem);
+}
+
+.toggle-medium .toggle-label {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  font-family: var(--typography-body-medium-font-family);
+}
+
+.toggle-medium.toggle-label-left .toggle-content {
+  width: 5rem;
+  flex: 0 0 5rem;
+}
+
+.toggle-medium.toggle-label-left .toggle-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.toggle-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toggle-description {
+  font-size: 0.875rem;
+  opacity: 0.7;
+}

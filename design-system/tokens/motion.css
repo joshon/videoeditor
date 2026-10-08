@@ -1,0 +1,29 @@
+/* ===========================================
+   Motion Tokens - Generated from Design System
+   =========================================== */
+
+:root {
+  /* Motion primitives */
+  --motion-snappy-duration: 0.2s;
+  --motion-snappy-easing: ease-in-out;
+  --motion-snappy: 0.2s ease-in-out;
+  --motion-snappy-transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+  --motion-slow-duration: 0.8s;
+  --motion-slow-easing: ease-in-out;
+  --motion-slow: 0.8s ease-in-out;
+  --motion-slow-transition: background-color 0.8s ease-in-out, color 0.8s ease-in-out, border-color 0.8s ease-in-out, box-shadow 0.8s ease-in-out, opacity 0.8s ease-in-out, transform 0.8s ease-in-out;
+
+  /* The system's interface motion, for components with no opinion */
+  --motion-transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+
+  /* Per-block state transitions */
+  --cb-brand-transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+  --cb-brand-transition-hover: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+  --cb-brand-transition-active: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+  --cb-ui-transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+  --cb-ui-transition-hover: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+  --cb-ui-transition-active: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+  --cb-subtle-transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+  --cb-subtle-transition-hover: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+  --cb-subtle-transition-active: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+}

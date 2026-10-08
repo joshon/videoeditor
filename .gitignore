@@ -1,0 +1,7 @@
+# Your edit projects: media, caches, history and exports (large, personal)
+projects/
+
+node_modules/
+.next/
+.DS_Store
+npm-debug.log*

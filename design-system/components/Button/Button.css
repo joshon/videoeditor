@@ -1,0 +1,373 @@
+/* ===========================================
+   Button Component Styles - CSS-First
+   Uses CSS variables for all colors
+   Native CSS selectors for state changes
+   =========================================== */
+
+:root {
+  --cb-focus-ring: oklch(72.27% 0.19 149.58deg);
+}
+
+/* Button component disabled color overrides for mode: light */
+[data-mode="1"] {
+  --btn-disabled-bg-override: oklch(81.03% 0 none);
+  --btn-disabled-text-override: oklch(51.72% 0 none);
+}
+
+/* Button component disabled color overrides for mode: dark */
+[data-mode="2"] {
+  --btn-disabled-bg-override: oklch(37.07% 0 none);
+  --btn-disabled-text-override: oklch(59.05% 0 none);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: var(--motion-transition, background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, transform 0.15s ease, outline 0.15s ease, outline-offset 0.15s ease);
+  position: relative;
+  /* Create stacking context so ::before with z-index: -1 stays within button */
+  isolation: isolate;
+  /* Remove default focus outline - we apply custom focus styling */
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+.btn-medium {
+  height: 2rem;
+  padding: 0 10px;
+  font-family: var(--typography-body-medium-font-family);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  border-radius: 1rem;
+  border-width: 1px;
+  gap: 6px;
+}
+
+.btn-medium.btn-icon-only {
+  width: 2rem;
+  padding: 0;
+}
+
+.btn-medium .btn-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.btn-large {
+  height: 3rem;
+  padding: 0 14px;
+  font-family: var(--typography-body-large-font-family);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.3;
+  border-radius: 1rem;
+  border-width: 1px;
+  gap: 2px;
+}
+
+.btn-large.btn-icon-only {
+  width: 3rem;
+  padding: 0;
+}
+
+.btn-large .btn-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* primary style */
+.btn-primary {
+  background: var(--cb-brand-bg);
+  color: var(--cb-brand-text);
+  border-style: solid;
+  border-color: var(--cb-brand-border, transparent);
+  box-shadow: var(--cb-brand-shadow, none);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--cb-brand-bg-hover, var(--cb-brand-bg));
+  color: var(--cb-brand-text-hover, var(--cb-brand-text));
+  border-color: var(--cb-brand-border-hover, var(--cb-brand-border, transparent));
+  box-shadow: var(--cb-brand-shadow-hover, var(--cb-brand-shadow, none));
+  transform: var(--cb-brand-offset-hover, var(--cb-brand-offset, none));
+  transition: var(--cb-brand-transition-hover, var(--motion-transition, inherit));
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--cb-brand-bg-active, var(--cb-brand-bg-hover, var(--cb-brand-bg)));
+  color: var(--cb-brand-text-active, var(--cb-brand-text));
+  box-shadow: var(--cb-brand-shadow-active, var(--cb-brand-shadow-hover, var(--cb-brand-shadow, none)));
+  transform: var(--cb-brand-offset-active, var(--cb-brand-offset-hover, var(--cb-brand-offset, none)));
+  transition: var(--cb-brand-transition-active, var(--motion-transition, inherit));
+}
+
+.btn-primary:disabled {
+  cursor: not-allowed;
+  background: var(--btn-disabled-bg-override, var(--cb-brand-bg-disabled, var(--cb-brand-bg)));
+  color: var(--btn-disabled-text-override, var(--cb-brand-text-disabled, var(--cb-brand-text)));
+  border-color: var(--btn-disabled-border-override, var(--cb-brand-border-disabled, var(--cb-brand-border, transparent)));
+}
+
+.btn-primary:focus,
+.btn-primary:focus-visible {
+  outline: 1.25px solid var(--cb-focus-ring, #0066ff);
+  outline-offset: 1.25px;
+  z-index: 2;
+}
+
+/* outline style */
+.btn-outline {
+  background: var(--cb-ui-bg);
+  color: var(--cb-ui-text);
+  border-style: solid;
+  border-color: var(--cb-ui-border, transparent);
+  box-shadow: var(--cb-ui-shadow, none);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--cb-ui-bg-hover, var(--cb-ui-bg));
+  color: var(--cb-ui-text-hover, var(--cb-ui-text));
+  border-color: var(--cb-ui-border-hover, var(--cb-ui-border, transparent));
+  box-shadow: var(--cb-ui-shadow-hover, var(--cb-ui-shadow, none));
+  transform: var(--cb-ui-offset-hover, var(--cb-ui-offset, none));
+  transition: var(--cb-ui-transition-hover, var(--motion-transition, inherit));
+}
+
+.btn-outline:active:not(:disabled) {
+  background: var(--cb-ui-bg-active, var(--cb-ui-bg-hover, var(--cb-ui-bg)));
+  color: var(--cb-ui-text-active, var(--cb-ui-text));
+  box-shadow: var(--cb-ui-shadow-active, var(--cb-ui-shadow-hover, var(--cb-ui-shadow, none)));
+  transform: var(--cb-ui-offset-active, var(--cb-ui-offset-hover, var(--cb-ui-offset, none)));
+  transition: var(--cb-ui-transition-active, var(--motion-transition, inherit));
+}
+
+.btn-outline:disabled {
+  cursor: not-allowed;
+  background: var(--btn-disabled-bg-override, var(--cb-ui-bg-disabled, var(--cb-ui-bg)));
+  color: var(--btn-disabled-text-override, var(--cb-ui-text-disabled, var(--cb-ui-text)));
+  border-color: var(--btn-disabled-border-override, var(--cb-ui-border-disabled, var(--cb-ui-border, transparent)));
+}
+
+.btn-outline:focus,
+.btn-outline:focus-visible {
+  outline: 1.25px solid var(--cb-focus-ring, #0066ff);
+  outline-offset: 1.25px;
+  z-index: 2;
+}
+
+/* subtle style */
+.btn-subtle {
+  background: transparent;
+  color: var(--cb-subtle-text);
+  border-style: solid;
+  border-color: var(--cb-subtle-border, transparent);
+  box-shadow: var(--cb-subtle-shadow, none);
+  overflow: hidden;
+}
+
+.btn-subtle::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--cb-subtle-bg);
+  opacity: var(--cb-subtle-opacity, 1);
+  pointer-events: none;
+  z-index: -1;
+  transition: var(--motion-transition, background 0.15s ease, opacity 0.15s ease);
+}
+
+.btn-subtle:hover:not(:disabled) {
+  color: var(--cb-subtle-text-hover, var(--cb-subtle-text));
+  border-color: var(--cb-subtle-border-hover, var(--cb-subtle-border, transparent));
+  box-shadow: var(--cb-subtle-shadow-hover, var(--cb-subtle-shadow, none));
+  transform: var(--cb-subtle-offset-hover, var(--cb-subtle-offset, none));
+  transition: var(--cb-subtle-transition-hover, var(--motion-transition, inherit));
+}
+.btn-subtle:hover:not(:disabled)::before {
+  background: var(--cb-subtle-bg-hover, var(--cb-subtle-bg));
+  opacity: var(--cb-subtle-opacity-hover, var(--cb-subtle-opacity, 1));
+}
+
+.btn-subtle:active:not(:disabled) {
+  color: var(--cb-subtle-text-active, var(--cb-subtle-text));
+  box-shadow: var(--cb-subtle-shadow-active, var(--cb-subtle-shadow-hover, var(--cb-subtle-shadow, none)));
+  transform: var(--cb-subtle-offset-active, var(--cb-subtle-offset-hover, var(--cb-subtle-offset, none)));
+  transition: var(--cb-subtle-transition-active, var(--motion-transition, inherit));
+}
+.btn-subtle:active:not(:disabled)::before {
+  background: var(--cb-subtle-bg-active, var(--cb-subtle-bg-hover, var(--cb-subtle-bg)));
+  opacity: var(--cb-subtle-opacity-active, var(--cb-subtle-opacity-hover, var(--cb-subtle-opacity, 1)));
+}
+
+.btn-subtle:disabled {
+  cursor: not-allowed;
+  color: var(--btn-disabled-text-override, var(--cb-subtle-text-disabled, var(--cb-subtle-text)));
+  border-color: var(--btn-disabled-border-override, var(--cb-subtle-border-disabled, var(--cb-subtle-border, transparent)));
+}
+.btn-subtle:disabled::before {
+  background: var(--btn-disabled-bg-override, var(--cb-subtle-bg-disabled, var(--cb-subtle-bg)));
+  opacity: var(--btn-disabled-opacity-override, var(--cb-subtle-opacity-disabled, var(--cb-subtle-opacity, 1)));
+}
+
+.btn-subtle:focus,
+.btn-subtle:focus-visible {
+  outline: 1.25px solid var(--cb-focus-ring, #0066ff);
+  outline-offset: 1.25px;
+  z-index: 2;
+}
+
+/* option_menu style */
+.btn-option_menu {
+  background: transparent;
+  color: var(--cb-subtle-text);
+  border-style: solid;
+  border-color: var(--cb-subtle-border, transparent);
+  box-shadow: var(--cb-subtle-shadow, none);
+  overflow: hidden;
+}
+
+.btn-option_menu::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--cb-subtle-bg);
+  opacity: var(--cb-subtle-opacity, 1);
+  pointer-events: none;
+  z-index: -1;
+  transition: var(--motion-transition, background 0.15s ease, opacity 0.15s ease);
+}
+
+.btn-option_menu:hover:not(:disabled) {
+  color: var(--cb-subtle-text-hover, var(--cb-subtle-text));
+  border-color: var(--cb-subtle-border-hover, var(--cb-subtle-border, transparent));
+  box-shadow: var(--cb-subtle-shadow-hover, var(--cb-subtle-shadow, none));
+  transform: var(--cb-subtle-offset-hover, var(--cb-subtle-offset, none));
+  transition: var(--cb-subtle-transition-hover, var(--motion-transition, inherit));
+}
+.btn-option_menu:hover:not(:disabled)::before {
+  background: var(--cb-subtle-bg-hover, var(--cb-subtle-bg));
+  opacity: var(--cb-subtle-opacity-hover, var(--cb-subtle-opacity, 1));
+}
+
+.btn-option_menu:active:not(:disabled) {
+  color: var(--cb-subtle-text-active, var(--cb-subtle-text));
+  box-shadow: var(--cb-subtle-shadow-active, var(--cb-subtle-shadow-hover, var(--cb-subtle-shadow, none)));
+  transform: var(--cb-subtle-offset-active, var(--cb-subtle-offset-hover, var(--cb-subtle-offset, none)));
+  transition: var(--cb-subtle-transition-active, var(--motion-transition, inherit));
+}
+.btn-option_menu:active:not(:disabled)::before {
+  background: var(--cb-subtle-bg-active, var(--cb-subtle-bg-hover, var(--cb-subtle-bg)));
+  opacity: var(--cb-subtle-opacity-active, var(--cb-subtle-opacity-hover, var(--cb-subtle-opacity, 1)));
+}
+
+.btn-option_menu:disabled {
+  cursor: not-allowed;
+  color: var(--btn-disabled-text-override, var(--cb-subtle-text-disabled, var(--cb-subtle-text)));
+  border-color: var(--btn-disabled-border-override, var(--cb-subtle-border-disabled, var(--cb-subtle-border, transparent)));
+}
+.btn-option_menu:disabled::before {
+  background: var(--btn-disabled-bg-override, var(--cb-subtle-bg-disabled, var(--cb-subtle-bg)));
+  opacity: var(--btn-disabled-opacity-override, var(--cb-subtle-opacity-disabled, var(--cb-subtle-opacity, 1)));
+}
+
+.btn-option_menu:focus,
+.btn-option_menu:focus-visible {
+  outline: 1.25px solid var(--cb-focus-ring, #0066ff);
+  outline-offset: 1.25px;
+  z-index: 2;
+}
+
+.btn-option_menu.btn-medium {
+  border-radius: 0.25rem;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.btn-label {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Button Group */
+.btn-group {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.btn-group .btn {
+  border-radius: 0;
+}
+
+.btn-group.btn-group-medium .btn:first-child {
+  border-top-left-radius: 1rem;
+  border-bottom-left-radius: 1rem;
+}
+
+.btn-group.btn-group-medium .btn:last-child {
+  border-top-right-radius: 1rem;
+  border-bottom-right-radius: 1rem;
+}
+
+.btn-group.btn-group-large .btn:first-child {
+  border-top-left-radius: 1rem;
+  border-bottom-left-radius: 1rem;
+}
+
+.btn-group.btn-group-large .btn:last-child {
+  border-top-right-radius: 1rem;
+  border-bottom-right-radius: 1rem;
+}
+
+.btn-group-option_menu.btn-group-medium .btn:first-child {
+  border-top-left-radius: 0.25rem;
+  border-bottom-left-radius: 0.25rem;
+}
+
+.btn-group-option_menu.btn-group-medium .btn:last-child {
+  border-top-right-radius: 0.25rem;
+  border-bottom-right-radius: 0.25rem;
+}
+
+/* Per-style button group gaps */
+.btn-group-primary {
+  gap: 1px;
+}
+
+.btn-group-outline .btn:not(:first-child) {
+  margin-left: -1px;
+}
+
+.btn-group-subtle .btn:not(:first-child) {
+  margin-left: -1px;
+}
+
+.btn-group-option_menu .btn:not(:first-child) {
+  margin-left: -1px;
+}
+
+
+.btn-group .btn:hover,
+.btn-group .btn:focus,
+.btn-group .btn:focus-visible {
+  z-index: 1;
+  position: relative;
+}
+
+/* Round button modifier - overrides all corner radius settings */
+.btn-round {
+  border-radius: 9999px !important;
+}

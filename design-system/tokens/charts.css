@@ -1,0 +1,67 @@
+/**
+ * Chart tokens — the part of a chart that is CSS.
+ *
+ * The rest of it (tick counts, curves, scale kinds, band padding) cannot be a
+ * custom property and is exported alongside this as a module. Both halves are
+ * generated from the same .ds file; regenerate them together.
+ */
+
+:root {
+  /* The categorical palette, in scale order. Series N takes --chart-N. */
+  --chart-1: oklch(22.00% 0 0deg);
+  --chart-2: oklch(31.50% 0 0deg);
+  --chart-3: oklch(41.00% 0 0deg);
+  --chart-4: oklch(50.50% 0 0deg);
+  --chart-5: oklch(60.00% 0 0deg);
+  --chart-6: oklch(69.50% 0 0deg);
+  --chart-7: oklch(79.00% 0 0deg);
+  --chart-8: oklch(88.50% 0 0deg);
+
+  /* Page-level defaults. A type below may override any of them. */
+  --chart-mark-stroke-width: 2px;
+  --chart-corner-radius: 4px;
+  --chart-area-fill-opacity: 0.18;
+  --chart-grid-line-color: oklch(0% 0 0);
+  --chart-grid-line-opacity: 0.1;
+  --chart-transition: 0.2s ease-in-out;
+
+  /* The plot area, which is a panel like any other surface. */
+  --chart-plot-background: oklch(100% 0 0);
+  --chart-plot-ink: oklch(29.74% 0 none);
+  --chart-plot-border-color: oklch(81.03% 0 none);
+  --chart-plot-border-width: 1px;
+  --chart-plot-corner-radius: 1.25rem;
+
+  /* bar — cartesian, bar */
+  --chart-bar-mark-stroke-width: 2px;
+  --chart-bar-corner-radius: 4px;
+
+  /* line — cartesian, line */
+  --chart-line-mark-stroke-width: 2px;
+  --chart-line-corner-radius: 4px;
+
+  /* area — cartesian, area */
+  --chart-area-mark-stroke-width: 2px;
+  --chart-area-corner-radius: 4px;
+  --chart-area-area-fill-opacity: 0.18;
+
+  /* scatter — cartesian, point */
+  --chart-scatter-mark-stroke-width: 2px;
+  --chart-scatter-corner-radius: 4px;
+  --chart-scatter-mark-size: 6px;
+
+  /* donut — radial, wedge */
+  --chart-donut-mark-stroke-width: 2px;
+  --chart-donut-corner-radius: 4px;
+  --chart-donut-inner-radius-ratio: 0.6;
+
+  /* sparkline — cartesian, line */
+  --chart-sparkline-mark-stroke-width: 2px;
+  --chart-sparkline-corner-radius: 4px;
+}
+
+/* A series the pointer is on, and the ones it is not. */
+:root {
+  --chart-hover-opacity: 1;
+  --chart-muted-opacity: 0.25;
+}

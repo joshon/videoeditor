@@ -1,0 +1,316 @@
+/* ===========================================
+   Input Component Styles - CSS-First
+   Uses CSS variables for all colors
+   Mode-aware: variables defined at component level
+   to pick up [data-mode] context from ancestors
+   =========================================== */
+
+.input-wrapper {
+  /* Color block references - mode-aware */
+  --input-bg: var(--cb-ui-bg);
+  --input-bg-hover: var(--cb-ui-bg-hover, var(--cb-ui-bg));
+  --input-bg-disabled: var(--cb-ui-bg-disabled, var(--cb-ui-bg));
+  --input-text: var(--cb-ui-text);
+  --input-text-disabled: var(--cb-ui-text-disabled, var(--cb-ui-text));
+  --input-border: var(--cb-ui-border, transparent);
+  --input-border-hover: var(--cb-ui-border-hover, var(--cb-ui-border, transparent));
+  --input-border-disabled: var(--cb-ui-border-disabled, var(--cb-ui-border, transparent));
+  --input-placeholder: var(--cb-secondary_text-text);
+  --input-instructions-color: var(--cb-ui-text);
+  --input-notes-color: var(--cb-secondary_text-text);
+  --input-focus-ring: oklch(72.27% 0.19 149.58deg);
+  --input-error: var(--input-error-override, #ef4444);
+  --input-error-border: var(--input-error-border-override, var(--input-error-override, #ef4444));
+
+  /* Menu/Dropdown Styles */
+  --menu-bg: var(--cb-surface-card-bg);
+  --menu-border: var(--cb-surface-card-border, transparent);
+  --menu-shadow: var(--cb-surface-card-shadow, 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06));
+
+  /* Layout */
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+  position: relative;
+}
+
+.input-label {
+  color: var(--input-text);
+}
+
+.input-base {
+  width: 100%;
+  background: var(--input-bg);
+  color: var(--input-text);
+  border: 1px solid var(--input-border);
+  font-family: inherit;
+  transition: all 0.2s ease;
+  outline: none;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  text-align: left;
+}
+
+.dropdown-trigger {
+  cursor: pointer;
+  justify-content: space-between;
+}
+
+.dropdown-chevron {
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.dropdown-trigger[aria-expanded="true"] .dropdown-chevron {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 100%;
+  background: var(--menu-bg);
+  border: 1px solid var(--menu-border);
+  border-radius: 1.25rem;
+  box-shadow: var(--menu-shadow);
+  z-index: 50;
+  padding: 4px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  box-sizing: border-box;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.input-base::placeholder {
+  color: var(--input-placeholder);
+}
+
+.input-base:hover:not(:disabled) {
+  border-color: var(--input-border-hover);
+  background: var(--input-bg-hover);
+}
+
+.input-base:focus, .dropdown-trigger[aria-expanded="true"] {
+  border-color: var(--input-focus-ring);
+  box-shadow: 0 0 0 1.25px var(--input-focus-ring);
+}
+
+.input-base:disabled {
+  background: var(--input-bg-disabled);
+  color: var(--input-text-disabled);
+  border-color: var(--input-border-disabled);
+  cursor: not-allowed;
+}
+
+.input-base:disabled::placeholder {
+  color: var(--input-text-disabled);
+}
+
+.input-error .input-base {
+  border-color: var(--input-error-border);
+}
+
+.input-error .input-base:focus {
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+.input-error-message {
+  font-size: 0.75rem;
+  color: var(--input-error);
+}
+
+.input-row {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.input-inline .input-row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.input-inline-label {
+  color: var(--input-text);
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 60px;
+}
+
+.input-inline .input-instructions,
+.input-inline .input-notes,
+.input-inline .input-error-message {
+  margin-left: var(--inline-label-offset, 0);
+}
+
+.input-field-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.input-icon {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--input-placeholder);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.input-icon-left {
+  left: 0.75rem;
+}
+
+.input-icon-right {
+  right: 0.75rem;
+}
+
+.textarea-icon {
+  top: 0.75rem;
+  align-items: flex-start;
+}
+
+.input-instructions {
+  color: var(--input-instructions-color, var(--input-text));
+}
+
+.input-notes {
+  color: var(--input-notes-color, var(--input-placeholder));
+}
+
+.input-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.input-footer-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.input-char-count {
+  font-size: 0.75rem;
+  color: var(--input-placeholder);
+  white-space: nowrap;
+}
+
+.dropdown-section-header {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--input-placeholder);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.dropdown-section-header:first-child {
+  margin-top: 0;
+}
+
+.dropdown-option-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+/* Size: medium */
+.input-medium {
+  max-width: 15rem;
+}
+
+.input-medium .input-base {
+  height: 2rem;
+  padding-left: 10px;
+  padding-right: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  font-family: var(--typography-body-medium-font-family);
+  border-radius: 1rem;
+  border-width: 1px;
+}
+
+.input-medium .input-base:hover:not(:disabled) {
+  border-radius: 1rem;
+}
+
+.input-medium .input-base:active:not(:disabled) {
+  border-radius: 1rem;
+}
+
+.input-medium .input-base:focus {
+  border-radius: 1rem;
+}
+
+.input-medium .input-label {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  font-family: var(--typography-body-medium-font-family);
+}
+
+.input-medium textarea.input-base {
+  height: auto;
+  padding: 8px 10px;
+}
+
+.input-medium .input-instructions {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  font-family: var(--typography-body-medium-font-family);
+}
+
+.input-medium .input-notes {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  font-family: var(--typography-body-medium-font-family);
+}
+
+.input-medium .input-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.input-medium .input-base.has-left-icon {
+  padding-left: calc(10px + 1rem + 6px);
+}
+
+.input-medium .input-base.has-right-icon {
+  padding-right: calc(10px + 1rem + 6px);
+}
+
+.input-medium.input-inline .input-row {
+  gap: 12px;
+}
+
+.input-medium.input-inline .input-inline-label {
+  width: 5rem;
+  max-width: 40%;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  font-family: var(--typography-body-medium-font-family);
+}
+
+.input-medium.input-inline {
+  --inline-label-offset: calc(min(5rem, 40%) + 12px);
+}
