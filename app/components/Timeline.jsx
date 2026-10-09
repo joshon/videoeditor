@@ -1,21 +1,24 @@
+import { Button, Toggle } from '@ds/components';
+
 // Track headers are built by the engine; clips, ruler and playhead are drawn on #tlCanvas.
 export default function Timeline() {
   return (
     <section className="timeline-panel" id="timelinePanel" tabIndex={0}>
       <div className="timeline-toolbar">
-        <button className="btn btn-subtle btn-small" id="undoBtn" title="Undo (⌘Z)">Undo</button>
-        <button className="btn btn-subtle btn-small" id="redoBtn" title="Redo (⇧⌘Z)">Redo</button>
+        <Button variant="subtle" id="undoBtn" title="Undo (⌘Z)">Undo</Button>
+        <Button variant="subtle" id="redoBtn" title="Redo (⇧⌘Z)">Redo</Button>
         <span className="sep"></span>
-        <button className="btn btn-subtle btn-small" id="splitBtn" title="Split clips at playhead (S)">Split</button>
-        <button className="btn btn-subtle btn-small" id="deleteBtn" title="Delete selected (⌫) · ⇧⌫ ripple delete">Delete</button>
-        <button className="btn btn-subtle btn-small toggle" id="snapBtn" aria-pressed="true" title="Snapping (N)">Snap</button>
-        <button className="btn btn-subtle btn-small toggle" id="linkBtn" aria-pressed="true" title="Linked selection — move video and its audio together">Link</button>
+        <Button variant="subtle" id="splitBtn" title="Split clips at playhead (S)">Split</Button>
+        <Button variant="subtle" id="deleteBtn" title="Delete selected (⌫) · ⇧⌫ ripple delete">Delete</Button>
         <span className="sep"></span>
-        <button className="btn btn-subtle btn-small" id="addVBtn">+ Video track</button>
-        <button className="btn btn-subtle btn-small" id="addABtn">+ Audio track</button>
+        <Toggle id="snapBtn" label="Snap" defaultChecked title="Snapping (N)" />
+        <Toggle id="linkBtn" label="Link" defaultChecked title="Linked selection — move video and its audio together" />
+        <span className="sep"></span>
+        <Button variant="subtle" id="addVBtn">+ Video track</Button>
+        <Button variant="subtle" id="addABtn">+ Audio track</Button>
         <div className="spacer"></div>
         <span className="text-ui-small hint" id="tlHint">Drag media here · drag edges to trim · ⌥-drag to unlink</span>
-        <button className="btn btn-subtle btn-small" id="fitBtn" title="Zoom to fit (\)">Fit</button>
+        <Button variant="subtle" id="fitBtn" title="Zoom to fit (\)">Fit</Button>
         <input type="range" id="zoomSlider" min="0" max="1000" defaultValue="400" title="Zoom (− / =)" />
       </div>
       <div className="timeline-body">

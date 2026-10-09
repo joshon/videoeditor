@@ -21,7 +21,9 @@ there and in `.claude/launch.json` together.
 
 Styling comes from the design system in `design-system/` (pulled from Design System Studio;
 see `design-system/AGENTS.md`), imported once in `app/layout.js`. Re-pull to update it.
-`design-system/ADOPTION.md` is the plan for restyling the editor with it.
+`design-system/ADOPTION.md` records how the editor was moved onto it. Some generated
+`.jsx` files contain TypeScript syntax; `next.config.mjs` parses them as TSX (via
+`build/passthrough-loader.cjs`) so the folder never needs hand edits.
 
 Requires Node 20.9+ and `ffmpeg`/`ffprobe` on `PATH` (override with `FFMPEG=`/`FFPROBE=`).
 Projects live in `videoeditor/projects/` by default (override with `VE_PROJECTS_DIR=`).

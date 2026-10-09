@@ -548,10 +548,9 @@ server.on('error', (e) => {
   console.error(`If not, find what holds it with: lsof -nP -iTCP:${PORT} -sTCP:LISTEN`);
   process.exit(1);
 });
+// Next's request handler attaches its own websocket (hot reload) handler to this
+// server on the first request, so no 'upgrade' listener is added here.
 nextApp.prepare().then(() => {
-  // Lets Next's dev server push hot reloads over its websocket.
-  const upgrade = nextApp.getUpgradeHandler && nextApp.getUpgradeHandler();
-  if (upgrade) server.on('upgrade', (req, socket, head) => upgrade(req, socket, head));
   server.listen(PORT, '127.0.0.1', () => {
     console.log(`Cutroom running at http://localhost:${PORT}${DEV ? ' (Next.js dev mode)' : ''}`);
     console.log(`Projects folder: ${PROJECTS_DIR}`);

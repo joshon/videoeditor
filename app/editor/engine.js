@@ -27,23 +27,44 @@ function toast(msg, isError) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('on'), isError ? 6000 : 2200);
 }
 
+// Markup for design-system components the engine creates itself (bin items,
+// track heads, dialog lists). It matches what the React components render:
+// design-system/components/Button and Icon.
+function dsButton(variant, label, cls = '', title = '') {
+  return `<button type="button" class="btn btn-medium btn-${variant} ${cls}"${title ? ` title="${escapeHtml(title)}"` : ''}><span class="btn-label">${label}</span></button>`;
+}
+function dsIconButton(variant, icon, cls = '', title = '') {
+  return `<button type="button" class="btn btn-medium btn-${variant} btn-icon-only ${cls}"${title ? ` title="${escapeHtml(title)}"` : ''}><span class="btn-icon btn-icon-left"><span class="ds-icon" aria-hidden="true">${icon}</span></span></button>`;
+}
+function dsToggle(label, checked, title = '') {
+  return `<label class="toggle toggle-medium"${title ? ` title="${escapeHtml(title)}"` : ''}><input type="checkbox" class="toggle-input"${checked ? ' checked' : ''}><div class="toggle-track"><div class="toggle-thumb"></div></div><div class="toggle-content"><span class="toggle-label">${label}</span></div></label>`;
+}
+// Set a design-system Button's text without removing its inner label element.
+function setButtonText(el, text) { (el.querySelector('.btn-label') || el).textContent = text; }
+
 // ------------------------------------------------------------------ theme
-// Canvas can't read CSS variables directly, so resolve the tokens once.
+// Canvas can't read CSS variables directly, so resolve the design-system tokens
+// once: C holds colors and fonts, and the timeline geometry below holds sizes.
 let C = {};
-function readColors() {
+function readTheme() {
   const cs = getComputedStyle(document.documentElement);
   const v = (n) => cs.getPropertyValue(n).trim();
+  const rootPx = parseFloat(cs.fontSize) || 16;
+  const px = (n) => { const raw = v(n); return raw.endsWith('rem') ? parseFloat(raw) * rootPx : parseFloat(raw); };
   C = {
-    ruler: v('--cb-surface-content-bg'), muted: v('--cb-surface-card-text'), text: v('--cb-surface-001-text'),
-    lane: v('--cb-surface-001-bg'), laneAlt: v('--cb-subtle-bg'), panel: v('--cb-surface-card-bg'),
-    video: v('--cb-brand-bg'), videoText: v('--primitive-basics-text-25'),
-    audio: v('--primitive-datavis-categorical-002'), audioText: v('--primitive-basics-text-900'),
-    wave: v('--primitive-basics-indigo-1400'), select: v('--primitive-basics-core-white'),
-    playhead: v('--primitive-datavis-categorical-000'), mark: v('--cb-badge-warning-bg'),
+    ruler: v('--cb-surface-menu-bg'), muted: v('--cb-secondary_text-text'), text: v('--cb-surface-001-text'),
+    lane: v('--cb-surface-001-bg'), laneAlt: v('--cb-surface-003-bg'), panel: v('--cb-surface-card-bg'),
+    video: v('--primitive-datavis-categorical-001'), videoText: v('--primitive-basics-core-white'),
+    audio: v('--primitive-datavis-categorical-002'), audioText: v('--primitive-basics-grayscale-950'),
+    wave: v('--primitive-basics-grayscale-950'), select: v('--primitive-basics-core-white'),
+    playhead: v('--primitive-datavis-categorical-000'), mark: v('--primitive-evaluative-meh-200'),
     black: v('--primitive-basics-core-black'), missing: v('--cb-disabled-bg'),
     mono: v('--font-mono') || 'monospace', sans: v('--font-sans') || 'sans-serif',
-    small: parseFloat(v('--typography-ui-small-font-size')) || 12,
+    codeSize: px('--typography-code-medium-font-size') || 12, uiSize: px('--typography-ui-medium-font-size') || 12,
+    radius: px('--radius-sm') || 6, line: px('--border-md') || 2, lineThin: px('--border-md-sm') || 1.25, lineThick: px('--border-lg') || 3,
   };
+  RULER_H = px('--height-sm') || 32; VH = px('--height-lg') || 64; AH = px('--height-md') || 48;
+  GAP = px('--spacing-sm') || 10; LABEL_H = px('--spacing-xl') || 16;
 }
 
 // ------------------------------------------------------------------ state
@@ -263,7 +284,7 @@ function renderSource() {
       a.loadPeaks();
       const mk = sourceMarks();
       drawWave(ctx, a.peaks, 0, m.duration, 0, h * 0.2, w, h * 0.6, C.audio);
-      ctx.fillStyle = C.playhead; ctx.fillRect((src.t / m.duration) * w, 0, 2, h);
+      ctx.fillStyle = C.playhead; ctx.fillRect((src.t / m.duration) * w, 0, C.line, h);
       ctx.globalAlpha = 0.5; ctx.fillStyle = C.lane;
       ctx.fillRect(0, 0, (mk.in / m.duration) * w, h); ctx.fillRect((mk.out / m.duration) * w, 0, w, h); ctx.globalAlpha = 1;
     }
@@ -287,17 +308,18 @@ function renderSourceScrub() {
   } else if (m.hasAudio) { a.loadPeaks(); drawWave(ctx, a.peaks, 0, D, 0, 4, w, h - 8, C.audio); }
   const mk = sourceMarks(); const xi = (mk.in / D) * w, xo = (mk.out / D) * w;
   ctx.globalAlpha = 0.7; ctx.fillStyle = C.lane; ctx.fillRect(0, 0, xi, h); ctx.fillRect(xo, 0, w - xo, h); ctx.globalAlpha = 1;
-  ctx.fillStyle = C.mark; ctx.fillRect(xi, 0, 2, h); ctx.fillRect(xo - 2, 0, 2, h);
-  ctx.fillRect(xi, 0, xo - xi, 3); ctx.fillRect(xi, h - 3, xo - xi, 3);
+  ctx.fillStyle = C.mark; ctx.fillRect(xi, 0, C.line, h); ctx.fillRect(xo - C.line, 0, C.line, h);
+  ctx.fillRect(xi, 0, xo - xi, C.lineThick); ctx.fillRect(xi, h - C.lineThick, xo - xi, C.lineThick);
   const xp = (S.source.t / D) * w;
-  ctx.fillStyle = C.playhead; ctx.fillRect(xp - 1, 0, 2, h);
+  ctx.fillStyle = C.playhead; ctx.fillRect(xp - C.line / 2, 0, C.line, h);
   ctx.beginPath(); ctx.moveTo(xp - 6, 0); ctx.lineTo(xp + 6, 0); ctx.lineTo(xp, 8); ctx.fill();
   const fps = m.fps || seqFps();
   $('sourceInOut').innerHTML = `<span>In ${fmtTC(mk.in, fps)}</span><span>Out ${fmtTC(mk.out, fps)}</span><span>Duration ${fmtTC(mk.out - mk.in, fps)}</span>`;
 }
 
 // ------------------------------------------------------------------ timeline geometry
-const RULER_H = 28, VH = 62, AH = 46, GAP = 10;
+// Set from tokens in readTheme().
+let RULER_H = 32, VH = 64, AH = 48, GAP = 10, LABEL_H = 16;
 const xOf = (t) => (t - S.scroll) * S.zoom;
 const tOf = (x) => x / S.zoom + S.scroll;
 
@@ -364,7 +386,7 @@ function renderTimeline() {
     for (const r of rows) if (r.track.id === dt.vTrack || r.track.id === dt.aTrack) {
       ctx.globalAlpha = 0.5; ctx.fillStyle = r.track.kind === 'video' ? C.video : C.audio;
       ctx.fillRect(xOf(dt.start), r.y + 1, dl * S.zoom, r.h - 2); ctx.globalAlpha = 1;
-      ctx.strokeStyle = C.select; ctx.lineWidth = 1.5; ctx.strokeRect(xOf(dt.start), r.y + 1, dl * S.zoom, r.h - 2);
+      ctx.strokeStyle = C.select; ctx.lineWidth = C.lineThin; ctx.strokeRect(xOf(dt.start), r.y + 1, dl * S.zoom, r.h - 2);
     }
   }
   if (S.snapLine != null && (S.drag || S.dropTarget)) {
@@ -377,18 +399,18 @@ function renderTimeline() {
   const steps = [1 / fps, 2 / fps, 5 / fps, 10 / fps, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1200, 3600];
   const major = steps.find((s) => s * S.zoom >= 80) || 3600;
   const minor = major / (major >= 1 && major % 5 === 0 ? 5 : 2);
-  ctx.fillStyle = C.muted; ctx.font = `${C.small - 1}px ${C.mono}`; ctx.textBaseline = 'top';
+  ctx.fillStyle = C.muted; ctx.font = `${C.codeSize}px ${C.mono}`; ctx.textBaseline = 'middle';
   for (let t = Math.floor(tA / minor) * minor; t <= tB; t += minor) {
     if (t < -EPS) continue;
     const x = Math.round(xOf(t)) + 0.5; const isMajor = Math.abs(t / major - Math.round(t / major)) < 1e-6;
-    ctx.globalAlpha = isMajor ? 0.9 : 0.4; ctx.fillRect(x, isMajor ? 14 : 20, 1, isMajor ? 14 : 8);
-    if (isMajor) ctx.fillText(major < 1 ? fmtTC(t) : fmtTC(t).slice(0, 8), x + 4, 4);
+    ctx.globalAlpha = isMajor ? 0.9 : 0.4; ctx.fillRect(x, isMajor ? 0 : RULER_H * 0.7, 1, isMajor ? RULER_H : RULER_H * 0.3);
+    if (isMajor) ctx.fillText(major < 1 ? fmtTC(t) : fmtTC(t).slice(0, 8), x + 4, RULER_H / 2);
   }
   ctx.globalAlpha = 1;
 
   // Playhead
   const px = Math.round(xOf(S.playhead)) + 0.5;
-  ctx.fillStyle = C.playhead; ctx.fillRect(px - 0.5, 0, 2, h);
+  ctx.fillStyle = C.playhead; ctx.fillRect(px - C.line / 2, 0, C.line, h);
   ctx.beginPath(); ctx.moveTo(px - 7, 0); ctx.lineTo(px + 8, 0); ctx.lineTo(px + 0.5, 10); ctx.fill();
 }
 
@@ -399,35 +421,35 @@ function drawClip(ctx, c, r, cw, off) {
   if (vx1 <= vx0) return;
   const isVideo = r.track.kind === 'video';
   ctx.save();
-  ctx.beginPath(); ctx.roundRect(x0, y, Math.max(1, wpx), h, 5); ctx.clip();
+  ctx.beginPath(); ctx.roundRect(x0, y, Math.max(1, wpx), h, C.radius); ctx.clip();
   ctx.fillStyle = !m || m.status !== 'ready' ? C.missing : isVideo ? C.video : C.audio;
   ctx.fillRect(vx0, y, vx1 - vx0, h);
   if (a && a.ready) {
     if (isVideo && a.hasFrames) {
-      const th = h - 16; const tw = Math.max(16, (th * (m.width || 16)) / (m.height || 9));
+      const th = h - LABEL_H; const tw = Math.max(16, (th * (m.width || 16)) / (m.height || 9));
       const first = Math.max(0, Math.floor((vx0 - x0) / tw));
       for (let k = first; x0 + k * tw < vx1; k++) {
         const tx = x0 + k * tw; const mt = c.in + ((k + 0.5) * tw) / S.zoom;
         const img = a.frameAt(Math.min(mt, c.out - EPS), 40);
-        if (img) drawContain(ctx, img, img.naturalWidth, img.naturalHeight, tx, y + 14, tw, th);
+        if (img) drawContain(ctx, img, img.naturalWidth, img.naturalHeight, tx, y + LABEL_H, tw, th);
       }
     } else if (!isVideo) {
       a.loadPeaks();
-      drawWave(ctx, a.peaks, c.in + (vx0 - x0) / S.zoom, c.in + (vx1 - x0) / S.zoom, vx0, y + 14, vx1 - vx0, h - 16, C.wave);
+      drawWave(ctx, a.peaks, c.in + (vx0 - x0) / S.zoom, c.in + (vx1 - x0) / S.zoom, vx0, y + LABEL_H, vx1 - vx0, h - LABEL_H, C.wave);
     }
   }
   // label strip
-  ctx.fillStyle = isVideo ? C.video : C.audio; ctx.fillRect(vx0, y, vx1 - vx0, 14);
-  ctx.fillStyle = isVideo ? C.videoText : C.audioText; ctx.font = `${C.small - 1}px ${C.sans}`; ctx.textBaseline = 'top';
+  ctx.fillStyle = isVideo ? C.video : C.audio; ctx.fillRect(vx0, y, vx1 - vx0, LABEL_H);
+  ctx.fillStyle = isVideo ? C.videoText : C.audioText; ctx.font = `${C.uiSize}px ${C.sans}`; ctx.textBaseline = 'middle';
   const vol = c.volume != null && c.volume !== 1 ? `  ${(20 * Math.log10(Math.max(c.volume, 0.0001))).toFixed(1)} dB` : '';
-  ctx.fillText(((m && m.name) || 'Missing media') + vol, Math.max(x0, 0) + 6, y + 2);
+  ctx.fillText(((m && m.name) || 'Missing media') + vol, Math.max(x0, 0) + 6, y + LABEL_H / 2);
   if (off) { ctx.globalAlpha = 0.6; ctx.fillStyle = C.lane; ctx.fillRect(vx0, y, vx1 - vx0, h); ctx.globalAlpha = 1; }
   ctx.restore();
   if (S.selection.has(c.id)) {
-    ctx.strokeStyle = C.select; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.roundRect(x0 + 1, y + 1, Math.max(1, wpx - 2), h - 2, 5); ctx.stroke();
+    ctx.strokeStyle = C.select; ctx.lineWidth = C.line;
+    ctx.beginPath(); ctx.roundRect(x0 + 1, y + 1, Math.max(1, wpx - 2), h - 2, C.radius); ctx.stroke();
   }
-  if (S.source.clipId === c.id) { ctx.fillStyle = C.mark; ctx.fillRect(x0 + 2, y + h - 3, Math.max(1, wpx - 4), 2); }
+  if (S.source.clipId === c.id) { ctx.fillStyle = C.mark; ctx.fillRect(x0 + 2, y + h - C.lineThick, Math.max(1, wpx - 4), C.line); }
 }
 
 function renderTrackHeads() {
@@ -438,9 +460,9 @@ function renderTrackHeads() {
     d.style.top = r.y + 'px'; d.style.height = r.h + 'px';
     const isV = r.track.kind === 'video';
     const pressed = isV ? r.track.hidden : r.track.muted;
-    d.innerHTML = `<span class="tname text-labels-medium">${r.track.name}</span>
-      <button class="btn btn-subtle" aria-pressed="${!!pressed}" title="${isV ? 'Hide this track' : 'Mute this track'}">${isV ? 'Hide' : 'Mute'}</button>`;
-    d.querySelector('button').onclick = () => mutate(isV ? 'Toggle track visibility' : 'Toggle mute', () => {
+    d.innerHTML = `<span class="tname text-labels-medium">${escapeHtml(r.track.name)}</span>
+      ${dsToggle(isV ? 'Hide' : 'Mute', !!pressed, isV ? 'Hide this track' : 'Mute this track')}`;
+    d.querySelector('input').onchange = () => mutate(isV ? 'Toggle track visibility' : 'Toggle mute', () => {
       const t = trackById(r.track.id); if (isV) t.hidden = !t.hidden; else t.muted = !t.muted;
     });
     el.append(d);
@@ -702,8 +724,8 @@ function shuttle(dir) {
 }
 function updateTransport() {
   const p = S.play;
-  $('pgPlay').textContent = p && p.target === 'program' ? '❚❚' : '▶';
-  $('srcPlay').textContent = p && p.target === 'source' ? '❚❚' : '▶';
+  $('pgPlay').querySelector('.ds-icon').textContent = p && p.target === 'program' ? 'pause' : 'play_arrow';
+  $('srcPlay').querySelector('.ds-icon').textContent = p && p.target === 'source' ? 'pause' : 'play_arrow';
   $('rateLabel').textContent = p && p.rate !== 1 ? `${p.rate > 0 ? '▶' : '◀'} ${Math.abs(p.rate)}×` : '';
 }
 
@@ -875,7 +897,7 @@ function renderBin() {
     let el = binEls.get(m.id);
     if (!el) {
       el = document.createElement('div'); el.className = 'bin-item'; el.dataset.id = m.id;
-      el.innerHTML = `<canvas width="256" height="144"></canvas><div class="name text-ui-small"></div><div class="meta text-code-small"><span class="d"></span><span class="k"></span></div><div class="status"></div><button class="btn btn-subtle hide" title="Remove from bin (the file stays in the project folder)">×</button>`;
+      el.innerHTML = `<canvas width="256" height="144"></canvas><div class="name text-ui-small"></div><div class="meta text-code-small"><span class="d"></span><span class="k"></span></div><div class="status"></div>${dsIconButton('subtle', 'close', 'hide', 'Remove from bin (the file stays in the project folder)')}`;
       if (!m.upload) wireBinItem(el, m.id);
       el.querySelector('.hide').hidden = !!m.upload;
       grid.append(el); binEls.set(m.id, el);
@@ -886,7 +908,7 @@ function renderBin() {
     el.querySelector('.k').textContent = m.status === 'ready' ? (m.hasVideo ? `${m.width}×${m.height}` : 'audio') : '';
     const st = el.querySelector('.status');
     if (m.status === 'ready') st.innerHTML = '';
-    else if (m.status === 'error') st.innerHTML = `<div class="err text-ui-small">${escapeHtml(m.error || 'Failed')}</div><button class="btn btn-outline btn-small retry">Retry</button>`;
+    else if (m.status === 'error') st.innerHTML = `<div class="err text-ui-small">${escapeHtml(m.error || 'Failed')}</div>${dsButton('outline', 'Retry', 'retry')}`;
     else {
       const label = m.status === 'uploading' ? 'Copying into project' : m.status === 'queued' ? 'Waiting…' : 'Building scrub cache';
       st.innerHTML = `<div class="text-ui-small">${label} ${Math.round((m.progress || 0) * 100)}%</div><div class="progress"><div class="bar" style="width:${(m.progress || 0) * 100}%"></div></div>`;
@@ -896,7 +918,7 @@ function renderBin() {
   }
   $('binEmpty').hidden = items.length > 0;
   const hc = hidden.size;
-  $('showHiddenBtn').hidden = !hc; $('showHiddenBtn').textContent = `Show ${hc} removed item${hc > 1 ? 's' : ''}`;
+  $('showHiddenBtn').hidden = !hc; setButtonText($('showHiddenBtn'), `Show ${hc} removed item${hc > 1 ? 's' : ''}`);
   markBinActive(); requestRender('bin');
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -1213,7 +1235,8 @@ function wireSource() {
 // ------------------------------------------------------------------ keyboard
 function wireKeys() {
   document.addEventListener('keydown', (e) => {
-    if (e.target.closest('input, select, textarea, dialog[open]')) return;
+    // Switches (checkbox inputs) keep the shortcuts working; text fields and sliders don't.
+    if (e.target.closest('input:not([type="checkbox"]), select, textarea, dialog[open]')) return;
     const mod = e.metaKey || e.ctrlKey; const k = e.key.toLowerCase();
     const target = S.focus === 'source' ? 'source' : 'program';
     if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
@@ -1253,7 +1276,7 @@ function jumpEdit(dir) {
   const t = dir > 0 ? pts.find((p) => p > S.playhead + EPS) : [...pts].reverse().find((p) => p < S.playhead - EPS);
   if (t != null) { setPlayhead(t); ensurePlayheadVisible(); }
 }
-function toggleSnap() { S.snap = !S.snap; $('snapBtn').setAttribute('aria-pressed', S.snap); S.uiDirty = true; }
+function toggleSnap() { S.snap = !S.snap; $('snapBtn').checked = S.snap; S.uiDirty = true; }
 
 // ------------------------------------------------------------------ projects
 async function openProject(slug) {
@@ -1273,7 +1296,7 @@ async function openProject(slug) {
     snap: p.ui?.snap ?? true, linked: p.ui?.linked ?? true,
     source: { mediaId: null, clipId: null, t: 0 },
   });
-  $('snapBtn').setAttribute('aria-pressed', S.snap); $('linkBtn').setAttribute('aria-pressed', S.linked);
+  $('snapBtn').checked = S.snap; $('linkBtn').checked = S.linked;
   $('projectName').textContent = p.name; document.title = `${p.name} — Cutroom`;
   history.replaceState(null, '', `?p=${enc(slug)}`);
   setSaveState('saved', `Opened from disk`);
@@ -1311,7 +1334,8 @@ let exportPoll = 0;
 async function showExport() {
   try { await flushSave(); } catch { toast('Saving failed — fix that before exporting', true); return; }
   const dlg = $('exportDialog'); const sel = $('exPreset');
-  if (!sel.options.length) for (const [k, v] of Object.entries(S.info.presets)) sel.add(new Option(v.label, k, k === 'h264-standard', k === 'h264-standard'));
+  // #exPreset/#exRes/#exFps mirror the dialog's Dropdowns (components/Dialogs.jsx),
+  // which fire 'change' on them when the choice changes.
   if (!$('exName').value) $('exName').value = P().name;
   const s = P().settings; const summary = () => {
     const pr = S.info.presets[sel.value];
@@ -1408,8 +1432,8 @@ function wireChrome() {
   $('undoBtn').onclick = undo; $('redoBtn').onclick = redo;
   $('splitBtn').onclick = () => splitAt(S.playhead);
   $('deleteBtn').onclick = () => deleteSelected(false);
-  $('snapBtn').onclick = toggleSnap;
-  $('linkBtn').onclick = () => { S.linked = !S.linked; $('linkBtn').setAttribute('aria-pressed', S.linked); S.uiDirty = true; };
+  $('snapBtn').onchange = toggleSnap;
+  $('linkBtn').onchange = () => { S.linked = $('linkBtn').checked; S.uiDirty = true; };
   $('fitBtn').onclick = zoomFit;
   $('zoomSlider').oninput = (e) => zoomAroundPlayhead(ZMIN * Math.pow(ZMAX / ZMIN, e.target.value / 1000));
   $('addVBtn').onclick = () => mutate('Add video track', () => {
@@ -1437,7 +1461,7 @@ async function boot() {
   const pool = document.createElement('div'); pool.id = 'videoPool';
   pool.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;overflow:hidden;opacity:0.01;pointer-events:none;';
   document.body.append(pool);
-  readColors(); wireChrome(); wireTimeline(); wireSource(); wireKeys(); focusPanel('program');
+  readTheme(); wireChrome(); wireTimeline(); wireSource(); wireKeys(); focusPanel('program');
   S.info = await api('GET', '/api/info');
   const want = new URLSearchParams(location.search).get('p');
   const list = await api('GET', '/api/projects');

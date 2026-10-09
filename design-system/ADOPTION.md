@@ -1,6 +1,22 @@
 # Design system adoption plan — Cutroom
 
-Status: **plan only — waiting for go-ahead.** No UI has been restyled yet.
+Status: **done (2026-10-08)**, all six areas, using the plan's defaults for the
+four decisions in section 8: type sizes as mapped, switches, blue/green clips,
+Material Symbols transport icons.
+
+**What changed from the plan along the way:**
+- **TypeScript in the generated `.jsx`:** Design System Studio generated
+  `Button.jsx`, `Checkbox.jsx` and `TextField.jsx` with TypeScript syntax
+  (`x as T`, `useRef<T>()`), which doesn't compile as `.jsx`. Instead of editing
+  this folder, `next.config.mjs` has a Turbopack rule that parses
+  `design-system/**/*.jsx` as TSX, using `build/passthrough-loader.cjs`. Once the
+  generator is fixed, the rule can be removed.
+- **Clip label strip:** it's `--spacing-xl` (16px), not `--spacing-lg` (14px), so
+  12px clip names fit.
+- **Dialogs:** they scroll when the window is shorter than the dialog.
+- **Toolbar:** a separator now sits between the Snap/Link switches and the buttons.
+- **Keyboard shortcuts:** they keep working while a switch has focus (previously
+  any focused input blocked them).
 
 **Already wired**, as `AGENTS.md` asks:
 - `app/layout.js` imports `design-system/styles.css` once, and `<html data-mode="2">` puts it in dark mode.

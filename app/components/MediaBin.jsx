@@ -1,20 +1,22 @@
+import { Button, Text } from '@ds/components';
+
 const ACCEPT = 'video/*,audio/*,.mov,.mp4,.m4v,.mkv,.avi,.mts,.mxf,.wav,.mp3,.m4a,.aac,.aif,.aiff,.flac';
 
 // Bin items are added to #binGrid by the engine as media is imported.
 export default function MediaBin() {
   return (
-    <section className="panel bin" id="binPanel">
-      <div className="panel-head">
-        <span className="text-eyebrow-small">Media</span>
+    <section className="pane bin" id="binPanel">
+      <div className="pane-head">
+        <Text variant="eyebrow-small" as="span">Media</Text>
         <div className="spacer"></div>
-        <button className="btn btn-outline btn-small" id="importBtn">Import</button>
+        <Button variant="outline" id="importBtn">Import</Button>
         <input type="file" id="fileInput" multiple accept={ACCEPT} hidden />
       </div>
       <div className="bin-grid" id="binGrid"></div>
-      <div className="bin-empty text-body-small" id="binEmpty">
+      <Text variant="body-small" color="muted" className="bin-empty" id="binEmpty">
         Drop videos or audio here, or click <b>Import</b>.<br />Files are copied into the project folder.
-      </div>
-      <button className="link text-ui-small" id="showHiddenBtn" hidden></button>
+      </Text>
+      <Button variant="subtle" id="showHiddenBtn" hidden>Show removed items</Button>
     </section>
   );
 }
