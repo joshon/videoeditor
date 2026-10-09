@@ -427,10 +427,14 @@ function drawClip(ctx, c, r, cw, off) {
   if (a && a.ready) {
     if (isVideo && a.hasFrames) {
       const th = h - LABEL_H; const tw = Math.max(16, (th * (m.width || 16)) / (m.height || 9));
-      const first = Math.max(0, Math.floor((vx0 - x0) / tw));
-      for (let k = first; x0 + k * tw < vx1; k++) {
-        const tx = x0 + k * tw; const mt = c.in + ((k + 0.5) * tw) / S.zoom;
-        const img = a.frameAt(Math.min(mt, c.out - EPS), 40);
+      // Tiles sit on a grid in source time, not from the clip's left edge, so a
+      // trim reveals or hides frames instead of sliding the whole strip.
+      const tileDur = tw / S.zoom;
+      const first = Math.floor((c.in + (vx0 - x0) / S.zoom) / tileDur);
+      for (let k = first; x0 + (k * tileDur - c.in) * S.zoom < vx1; k++) {
+        const tx = x0 + (k * tileDur - c.in) * S.zoom;
+        const mt = clamp((k + 0.5) * tileDur, c.in, c.out - EPS);
+        const img = a.frameAt(mt, 40);
         if (img) drawContain(ctx, img, img.naturalWidth, img.naturalHeight, tx, y + LABEL_H, tw, th);
       }
     } else if (!isVideo) {
@@ -1472,8 +1476,13 @@ async function boot() {
 // Called once from the Editor component after it mounts (guarded against React
 // StrictMode's double effect run in development).
 let started = false;
+// In development, editing this file makes Next.js load a fresh copy of it while
+// the old copy keeps driving the page; two engines would fight over the canvas
+// and both save. Every edit is already on disk, so reload instead of starting twice.
 export function startEditor() {
   if (started) return;
+  if (window.__cutroomEngineStarted) { window.location.reload(); return; }
   started = true;
+  window.__cutroomEngineStarted = true;
   boot().catch((e) => { console.error(e); toast('Could not reach the Cutroom server: ' + e.message, true); });
 }
