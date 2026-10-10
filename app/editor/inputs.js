@@ -10,24 +10,42 @@ export async function saveInputSettings(patch) {
   await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
 }
 
-// A stream from the chosen microphone (and camera). A chosen device that has
-// gone away falls back to the system default rather than failing.
+// A stream from the microphone (and camera) chosen in the Inputs dialog.
+// Returns { stream, settings, fellBack }: if a chosen device is gone (unplugged),
+// the system default is used instead and its kind is listed in `fellBack`, so
+// the caller can say so rather than silently recording from something else.
 export async function getInputStream({ audio = true, video = false } = {}) {
-  const s = await loadInputSettings();
-  const constraints = {};
-  if (audio) constraints.audio = s.audioInputId ? { deviceId: { ideal: s.audioInputId } } : true;
-  if (video) {
-    constraints.video = {
-      ...(s.videoInputId ? { deviceId: { ideal: s.videoInputId } } : {}),
-      width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 },
-    };
+  const settings = await loadInputSettings();
+  const build = (useChosen) => {
+    const c = {};
+    if (audio) c.audio = useChosen.audio && settings.audioInputId ? { deviceId: { exact: settings.audioInputId } } : true;
+    if (video) {
+      c.video = {
+        ...(useChosen.video && settings.videoInputId ? { deviceId: { exact: settings.videoInputId } } : {}),
+        width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 },
+      };
+    }
+    return c;
+  };
+  const gone = (e) => e && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError');
+  const attempts = [{ audio: true, video: true }, { audio: false, video: true }, { audio: true, video: false }, { audio: false, video: false }];
+  let last;
+  for (const use of attempts) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(build(use));
+      const fellBack = [];
+      if (audio && settings.audioInputId && !use.audio) fellBack.push('microphone');
+      if (video && settings.videoInputId && !use.video) fellBack.push('camera');
+      return { stream, settings, fellBack };
+    } catch (e) { last = e; if (!gone(e)) throw e; }
   }
-  return navigator.mediaDevices.getUserMedia(constraints);
+  throw last;
 }
 
 export async function listInputDevices() {
   const all = await navigator.mediaDevices.enumerateDevices();
-  const name = (d, i, kind) => d.label || `${kind} ${i + 1}`;
+  // Chrome appends the USB ids, e.g. "W1 (32e6:9228)"; they only add noise.
+  const name = (d, i, kind) => (d.label || `${kind} ${i + 1}`).replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)\s*$/i, '');
   return {
     mics: all.filter((d) => d.kind === 'audioinput').map((d, i) => ({ value: d.deviceId, label: name(d, i, 'Microphone') })),
     cams: all.filter((d) => d.kind === 'videoinput').map((d, i) => ({ value: d.deviceId, label: name(d, i, 'Camera') })),

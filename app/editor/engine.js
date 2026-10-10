@@ -285,7 +285,8 @@ function renderProgram() {
   if (live && live.readyState >= 2 && live.videoWidth) {
     const pw = rw * 0.3, ph = (pw * live.videoHeight) / live.videoWidth;
     const px = rx + rw - pw - C.pad, py = ry + rh - ph - C.pad;
-    ctx.drawImage(live, px, py, pw, ph);
+    if (S.rec.mirror) { ctx.save(); ctx.translate(px + pw, py); ctx.scale(-1, 1); ctx.drawImage(live, 0, 0, pw, ph); ctx.restore(); }
+    else ctx.drawImage(live, px, py, pw, ph);
     ctx.strokeStyle = C.playhead; ctx.lineWidth = C.line; ctx.strokeRect(px, py, pw, ph);
   }
   $('programTc').textContent = fmtTC(t);
@@ -853,8 +854,8 @@ async function startRecording(trackId) {
   const withVideo = trackById(trackId)?.kind === 'video';
   if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return toast("This browser can't record here", true);
   if (S.play) stop(true);
-  let stream;
-  try { stream = await getInputStream({ audio: true, video: withVideo }); }
+  let stream, inputSettings = {}, fellBack = [];
+  try { ({ stream, settings: inputSettings, fellBack } = await getInputStream({ audio: true, video: withVideo })); }
   catch (e) {
     const what = withVideo ? 'Camera or microphone' : 'Microphone';
     return toast(`${what} unavailable (${e.name}). Check the Inputs dialog, and that this app is allowed to use them in System Settings › Privacy & Security.`, true);
@@ -864,10 +865,11 @@ async function startRecording(trackId) {
     : ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
   const mimeType = candidates.find((t) => MediaRecorder.isTypeSupported(t)) || '';
   let rec;
-  try { rec = await api('POST', `/api/projects/${enc(S.slug)}/recordings`, { trackId, start: S.playhead, mimeType }); }
+  const mirror = withVideo && !!inputSettings.mirrorVideo;
+  try { rec = await api('POST', `/api/projects/${enc(S.slug)}/recordings`, { trackId, start: S.playhead, mimeType, mirror }); }
   catch (e) { stream.getTracks().forEach((t) => t.stop()); return toast('Could not start recording: ' + e.message, true); }
   const recorder = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), ...(withVideo ? { videoBitsPerSecond: 8e6 } : {}) });
-  const R = S.rec = { id: rec.id, slug: S.slug, trackId, withVideo, start: S.playhead, recorder, stream, preview: null, sending: Promise.resolve(), lost: 0, startedWall: 0 };
+  const R = S.rec = { id: rec.id, slug: S.slug, trackId, withVideo, mirror, start: S.playhead, recorder, stream, preview: null, sending: Promise.resolve(), lost: 0, startedWall: 0 };
   if (withVideo) {
     // Live camera, drawn as an overlay on the Program viewer while recording.
     const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = stream;
@@ -881,7 +883,8 @@ async function startRecording(trackId) {
     renderTrackHeads(); requestRender('timeline');
   };
   recorder.start(1000);
-  toast(`Recording ${withVideo ? 'camera ' : ''}on ${trackById(trackId).name}. Click the stop button (or press Space) to finish.`);
+  const note = fellBack.length ? ` Your chosen ${fellBack.join(' and ')} wasn't found, so the default is being used.` : '';
+  toast(`Recording ${withVideo ? 'camera ' : ''}on ${trackById(trackId).name}. Click the stop button (or press Space) to finish.${note}`, fellBack.length > 0);
 }
 
 async function sendChunk(R, blob) {

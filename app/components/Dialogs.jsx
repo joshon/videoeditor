@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Dropdown, Surface, Text, TextField } from '@ds/components';
+import { Button, Dropdown, Surface, Text, TextField, Toggle } from '@ds/components';
 import { listInputDevices, loadInputSettings, saveInputSettings, watchLevel } from '../editor/inputs';
 
 // Modal dialogs. The engine opens them with showModal(), fills their lists and
@@ -131,6 +131,7 @@ export function InputsDialog() {
   const [devices, setDevices] = useState({ mics: [], cams: [] });
   const [mic, setMic] = useState('');
   const [cam, setCam] = useState('');
+  const [mirror, setMirror] = useState(false);
   const [level, setLevel] = useState(0);
   const [silent, setSilent] = useState(false);
   const [error, setError] = useState('');
@@ -169,6 +170,7 @@ export function InputsDialog() {
       setError(''); setOpen(true); dlg.current.showModal();
       if (!navigator.mediaDevices?.getUserMedia) { setError("This browser can't use a microphone or camera here."); return; }
       const saved = await loadInputSettings();
+      setMirror(!!saved.mirrorVideo);
       const micId = await startMic(saved.audioInputId);
       const camId = await startCam(saved.videoInputId);
       const found = await listInputDevices(); // labels appear once access is granted
@@ -192,7 +194,7 @@ export function InputsDialog() {
     <dialog className="modal" id="inputsDialog" ref={dlg}>
       <Surface as="form" method="dialog" variant="surface-menu" padding="large" rounded="large" className="modal-body">
         <Text variant="headers-h5">Inputs</Text>
-        <Text variant="body-small" color="muted">The microphone and camera used when you record onto a track. Talk to check the level.</Text>
+        <Text variant="body-small" color="muted">The microphone and camera used when you record onto a track. Talk to check the level. Mirroring flips camera takes recorded from now on.</Text>
         {open && (
           <>
             <Dropdown label="Microphone" options={devices.mics} value={mic} onChange={chooseMic} placeholder="Default microphone" />
@@ -203,7 +205,8 @@ export function InputsDialog() {
               </Text>
             )}
             <Dropdown label="Camera" options={devices.cams} value={cam} onChange={chooseCam} placeholder="Default camera" />
-            <video className="camera-preview" ref={preview} muted playsInline></video>
+            <Toggle label="Mirror camera" checked={mirror} onChange={(e) => { setMirror(e.target.checked); saveInputSettings({ mirrorVideo: e.target.checked }); }} />
+            <video className="camera-preview" data-mirrored={mirror || undefined} ref={preview} muted playsInline></video>
           </>
         )}
         {error && <Text variant="body-small" className="input-warning">{error}</Text>}

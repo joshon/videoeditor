@@ -247,7 +247,7 @@ async function startRecording(dir, body) {
   const mime = String(body.mimeType || '');
   const ext = /mp4|m4a|aac/.test(mime) ? (/^video\//.test(mime) ? '.mp4' : '.m4a') : '.webm';
   await fsp.mkdir(path.join(dir, 'recordings'), { recursive: true });
-  const rec = { id, ext, status: 'recording', startedAt: new Date().toISOString(), trackId: body.trackId || null, start: Number(body.start) || 0, mimeType: body.mimeType || '' };
+  const rec = { id, ext, status: 'recording', startedAt: new Date().toISOString(), trackId: body.trackId || null, start: Number(body.start) || 0, mimeType: body.mimeType || '', mirror: !!body.mirror };
   await fsp.writeFile(path.join(dir, 'recordings', id + ext), Buffer.alloc(0));
   await writeJsonAtomic(recPath(dir, id), rec);
   activeRecordings.set(`${dir}::${id}`, Date.now());
@@ -286,7 +286,7 @@ async function finishRecording(dir, id, name) {
   // A streamed recording has no duration or seek index; a stream copy writes both.
   try { await run(FFMPEG, ['-hide_banner', '-y', '-i', raw, '-c', 'copy', mediaFile]); }
   catch { await fsp.copyFile(raw, mediaFile); }
-  const meta = { id: mediaId, name: label + rec.ext, file: fileName, status: 'queued', progress: 0, importedAt: new Date().toISOString(), recording: id };
+  const meta = { id: mediaId, name: label + rec.ext, file: fileName, status: 'queued', progress: 0, importedAt: new Date().toISOString(), recording: id, ...(rec.mirror ? { mirror: true } : {}) };
   try { Object.assign(meta, await probe(mediaFile)); } catch {}
   meta.size = (await fsp.stat(mediaFile)).size;
   await writeJsonAtomic(metaPath(dir, mediaId), meta);
@@ -384,7 +384,7 @@ async function processMedia(dir, id) {
     await fsp.rm(framesDir, { recursive: true, force: true });
     await fsp.mkdir(framesDir, { recursive: true });
     const args = ['-hide_banner', '-y', '-i', src,
-      '-filter_complex', `[0:v]split=2[a][b];[a]${fitScale(1280)},format=yuv420p[p];[b]fps=${meta.scrubFps},${fitScale(360)}[f]`,
+      '-filter_complex', `[0:v]${meta.mirror ? 'hflip,' : ''}split=2[a][b];[a]${fitScale(1280)},format=yuv420p[p];[b]fps=${meta.scrubFps},${fitScale(360)}[f]`,
       // Proxy: short GOP so the browser can land on any frame quickly.
       '-map', '[p]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-g', '6', '-keyint_min', '6', '-sc_threshold', '0', '-an', '-movflags', '+faststart', path.join(cacheDir, 'proxy.mp4'),
       '-map', '[f]', '-q:v', '5', path.join(framesDir, '%06d.jpg')];
@@ -473,7 +473,7 @@ async function buildExport(dir, project, opts) {
     let prev = 'vb';
     vClips.forEach((c, k) => {
       const i = addInput(c); const end = c.start + (c.out - c.in);
-      graph.push(`[${i}:v]fps=${fps},scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p,setpts=PTS-STARTPTS+${t(c.start)}/TB[v${k}]`);
+      graph.push(`[${i}:v]${media[c.mediaId].mirror ? 'hflip,' : ''}fps=${fps},scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p,setpts=PTS-STARTPTS+${t(c.start)}/TB[v${k}]`);
       graph.push(`[${prev}][v${k}]overlay=eof_action=pass:enable='between(t,${t(c.start)},${t(end)})'[o${k}]`);
       prev = `o${k}`;
     });

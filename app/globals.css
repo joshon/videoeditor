@@ -123,6 +123,10 @@ code { font-family: var(--font-mono); }
 .level-fill[data-hot] { background: var(--primitive-evaluative-meh-200); }
 .camera-preview { width: 100%; aspect-ratio: 16 / 9; border-radius: var(--radius-md); background: var(--primitive-basics-core-black); object-fit: contain; }
 .input-warning { color: var(--cb-error-text); }
+.camera-preview[data-mirrored] { transform: scaleX(-1); }
+/* The design system's Dropdown lets a long choice wrap inside its fixed-height
+   trigger, where it gets clipped. Keep device names on one line with an ellipsis. */
+#inputsDialog .dropdown-trigger > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 /* ------------------------------------------------------------ overlays */
 .drop-overlay {
