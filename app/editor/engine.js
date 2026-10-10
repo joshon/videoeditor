@@ -78,6 +78,7 @@ const S = {
   snap: true, linked: true, focus: 'program',
   source: { mediaId: null, clipId: null, t: 0 },
   play: null, drag: null, mediaDrag: null, dropTarget: null, snapLine: null,
+  rec: null, // the take being recorded (see startRecording)
 };
 const P = () => S.project;
 const len = (c) => c.out - c.in;
@@ -130,7 +131,7 @@ class Asset {
     const key = this.meta.id + ':' + i;
     let img = this.frames.get(i);
     if (img) { const e = frameLRU.get(key); if (e) { frameLRU.delete(key); frameLRU.set(key, e); } return img; }
-    img = new Image(); img.decoding = 'async';
+    img = new Image(); img.decoding = 'async'; img._t = i / this.meta.scrubFps;
     img.onload = () => { img.ok = true; requestRender(); };
     img.src = this.base + 'frames/' + String(i + 1).padStart(6, '0') + '.jpg';
     this.frames.set(i, img); frameLRU.set(key, { asset: this, i });
@@ -177,12 +178,17 @@ class Asset {
     if (!v) {
       v = document.createElement('video');
       v.muted = true; v.playsInline = true; v.preload = 'auto'; v.src = this.base + 'proxy.mp4';
-      v._queued = null;
+      // _shownTime: the media time of the frame the element is actually showing.
+      // currentTime jumps to a new target as soon as a seek starts, but the old
+      // frame stays on screen until 'seeked'.
+      v._queued = null; v._shownTime = null;
       v.addEventListener('seeked', () => {
         if (v._queued != null) { const q = v._queued; v._queued = null; if (Math.abs(q - v.currentTime) > 1e-4) { v.currentTime = q; return; } }
+        v._shownTime = v.currentTime;
         requestRender();
       });
-      v.addEventListener('loadeddata', () => requestRender());
+      v.addEventListener('loadeddata', () => { v._shownTime = v.currentTime; requestRender(); });
+      v.addEventListener('pause', () => { v._shownTime = v.currentTime; });
       $('videoPool').append(v);
       this.videos[role] = v;
     }
@@ -197,9 +203,6 @@ function seekVideo(v, t) {
   if (v.seeking) { v._queued = t; return; }
   if (Math.abs(v.currentTime - t) > 1e-4) v.currentTime = t;
 }
-function videoShows(v, t, fps) {
-  return v && v.readyState >= 2 && !v.seeking && v._queued == null && Math.abs(v.currentTime - t) < 0.5 / fps + 1e-3;
-}
 
 function drawContain(ctx, src, sw, sh, x, y, w, h) {
   if (!sw || !sh) return;
@@ -207,19 +210,26 @@ function drawContain(ctx, src, sw, sh, x, y, w, h) {
   ctx.drawImage(src, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
 }
 
-// Draw media time `mt` of an asset into a rect. Uses the proxy video when it is
-// sitting on exactly this frame (or playing), otherwise the frame cache — which
-// is what makes dragging instant.
+// Draw media time `mt` of an asset into a rect, from whichever source is closest
+// to `mt`: the sharp proxy video (what it is showing right now, even mid-seek)
+// or the instant frame cache. The video keeps the screen unless the cache is
+// more than one cache step closer, so slow scrubbing doesn't flip between the
+// two or step backwards while a seek catches up.
 function drawAssetFrame(ctx, a, mt, x, y, w, h, role, playing) {
   if (!a || !a.hasFrames) return false;
-  const v = a.videos[role]; const fps = a.meta.fps || 30;
-  if (v && v.readyState >= 2 && (playing ? (!v.paused && Math.abs(v.currentTime - mt) < 0.2) : videoShows(v, mt, fps))) {
-    drawContain(ctx, v, v.videoWidth, v.videoHeight, x, y, w, h); return true;
+  const v = a.videos[role];
+  if (playing) {
+    if (v && v.readyState >= 2 && !v.paused && Math.abs(v.currentTime - mt) < 0.2) {
+      drawContain(ctx, v, v.videoWidth, v.videoHeight, x, y, w, h); return true;
+    }
   }
   const img = a.frameAt(mt);
-  if (img) drawContain(ctx, img, img.naturalWidth, img.naturalHeight, x, y, w, h);
+  const imgDist = img ? Math.abs(img._t - mt) : Infinity;
+  const vidDist = !playing && v && v.readyState >= 2 && v._shownTime != null ? Math.abs(v._shownTime - mt) : Infinity;
+  if (vidDist < Infinity && vidDist <= Math.max(imgDist, 1 / a.meta.scrubFps)) drawContain(ctx, v, v.videoWidth, v.videoHeight, x, y, w, h);
+  else if (img) drawContain(ctx, img, img.naturalWidth, img.naturalHeight, x, y, w, h);
   if (!playing) seekVideo(a.video(role), mt);
-  return !!img;
+  return !!img || vidDist < Infinity;
 }
 
 function drawWave(ctx, peaks, t0, t1, x, y, w, h, color) {
@@ -380,6 +390,16 @@ function renderTimeline() {
     }
   });
 
+  // The take being recorded, growing from where it started to the playhead.
+  if (S.rec && S.rec.startedWall) {
+    const r = rows.find((row) => row.track.id === S.rec.trackId);
+    if (r) {
+      const rx0 = xOf(S.rec.start), rw = Math.max(0, S.playhead - S.rec.start) * S.zoom;
+      ctx.globalAlpha = 0.35; ctx.fillStyle = C.playhead; ctx.fillRect(rx0, r.y + 1, rw, r.h - 2); ctx.globalAlpha = 1;
+      ctx.strokeStyle = C.playhead; ctx.lineWidth = C.lineThin; ctx.strokeRect(rx0, r.y + 1, rw, r.h - 2);
+    }
+  }
+
   // Drop ghost
   if (S.dropTarget) {
     const dt = S.dropTarget; const dl = dt.out - dt.in;
@@ -464,8 +484,15 @@ function renderTrackHeads() {
     d.style.top = r.y + 'px'; d.style.height = r.h + 'px';
     const isV = r.track.kind === 'video';
     const pressed = isV ? r.track.hidden : r.track.muted;
+    const recHere = S.rec && S.rec.trackId === r.track.id;
     d.innerHTML = `<span class="tname text-labels-medium">${escapeHtml(r.track.name)}</span>
-      ${dsToggle(isV ? 'Hide' : 'Mute', !!pressed, isV ? 'Hide this track' : 'Mute this track')}`;
+      ${dsToggle(isV ? 'Hide' : 'Mute', !!pressed, isV ? 'Hide this track' : 'Mute this track')}
+      ${isV ? '' : dsIconButton(recHere ? 'primary' : 'subtle', recHere ? 'stop' : 'mic', 'rec', recHere ? 'Stop recording' : 'Record onto this track from the playhead')}`;
+    if (!isV) d.querySelector('.rec').onclick = () => {
+      if (!S.rec) startRecording(r.track.id);
+      else if (S.rec.trackId === r.track.id) stopRecording();
+      else toast(`Already recording on ${trackById(S.rec.trackId)?.name || 'another track'}`);
+    };
     d.querySelector('input').onchange = () => mutate(isV ? 'Toggle track visibility' : 'Toggle mute', () => {
       const t = trackById(r.track.id); if (isV) t.hidden = !t.hidden; else t.muted = !t.muted;
     });
@@ -648,6 +675,7 @@ async function flushSave(opts) {
 setInterval(() => { if (S.uiDirty && !S.saving && S.changeSeq === S.savedSeq) save(); }, 5000);
 window.addEventListener('beforeunload', (e) => {
   if (!P()) return;
+  if (S.rec) { e.preventDefault(); e.returnValue = ''; }
   if (S.changeSeq !== S.savedSeq || S.uiDirty) {
     fetch(`/api/projects/${enc(S.slug)}`, { method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(projectBody(S.rev + 1)) });
     if (S.changeSeq !== S.savedSeq) { e.preventDefault(); e.returnValue = ''; }
@@ -655,7 +683,7 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 // ------------------------------------------------------------------ playback
-function restartPlayback() { const p = S.play; if (!p) return; const t = playTime(p); stop(); setPos(p.target, t); play(p.target, p.rate); }
+function restartPlayback() { const p = S.play; if (!p) return; const t = playTime(p); stop(true); setPos(p.target, t); play(p.target, p.rate); }
 function onAudioLoaded() { if (S.play && S.play.rate > 0) restartPlayback(); }
 // Audio hardware clock keeps picture locked to sound; fall back to the wall clock
 // if the audio device isn't running (no output device, suspended context).
@@ -670,12 +698,13 @@ function getPos(target) { return target === 'program' ? S.playhead : S.source.t;
 function setPos(target, t) { if (target === 'program') { S.playhead = Math.max(0, t); S.uiDirty = true; } else S.source.t = t; }
 
 function play(target, rate = 1) {
-  if (S.play) stop();
+  if (S.play) stop(true);
   const ctx = audioCtx(); if (ctx.state !== 'running') ctx.resume();
   let t0 = getPos(target);
   if (target === 'program') {
-    const e = seqEnd(); if (!e) return;
-    if (rate > 0 && t0 >= e - EPS) t0 = 0;
+    // While recording, play runs from the playhead even on an empty timeline or past its end.
+    const e = seqEnd(); if (!e && !S.rec) return;
+    if (rate > 0 && t0 >= e - EPS && !S.rec) t0 = 0;
   } else {
     const a = S.assets[S.source.mediaId]; if (!a || !a.ready) return;
     const mk = sourceMarks();
@@ -700,17 +729,17 @@ function play(target, rate = 1) {
         sched(a.audioBuf, p.c0 + delay, c.in + into, len(c) - into, c.volume ?? 1);
       }
     } else {
-      const a = S.assets[S.source.mediaId];
-      if (a.audioBuf) {
-        const c = S.source.clipId && clipById(S.source.clipId);
-        const pr = c && (c.linkId ? [c, ...partners(c)].find((x) => trackById(x.trackId).kind === 'audio') : c);
-        sched(a.audioBuf, p.c0, t0, a.meta.duration - t0, pr ? pr.volume ?? 1 : 1);
-      } else a.loadAudio();
+      const a = S.assets[S.source.mediaId]; const gain = sourceAudioGain();
+      if (gain > 0 && a.audioBuf) sched(a.audioBuf, p.c0, t0, a.meta.duration - t0, gain);
+      else if (gain > 0) a.loadAudio();
     }
   }
   updateTransport();
 }
-function stop() {
+// `internal` is for the engine's own restarts (after an edit, when audio loads).
+// Any other stop is the user's, and it also ends a recording in progress.
+function stop(internal = false) {
+  if (S.rec && !internal && !S.rec.stopping) { stopRecording(); return; }
   const p = S.play; if (!p) return;
   for (const n of p.nodes) { try { n.stop(); } catch {} }
   for (const a of Object.values(S.assets)) { const v = a.videos[p.target]; if (v && !v.paused) v.pause(); if (v) v._clip = null; }
@@ -761,6 +790,17 @@ function syncSourceVideo(p, t) {
   if (v.paused) v.play().catch(() => {});
 }
 
+// How loud the Source viewer plays. Media from the bin plays at full volume; a
+// timeline clip plays only the audio it has on the timeline (its linked audio
+// clip, at that clip's gain), so deleting or muting a clip's sound silences it here too.
+function sourceAudioGain() {
+  const c = S.source.clipId && clipById(S.source.clipId);
+  if (!c) return 1;
+  const ac = [c, ...partners(c)].find((x) => trackById(x.trackId) && trackById(x.trackId).kind === 'audio');
+  if (!ac || trackById(ac.trackId).muted) return 0;
+  return ac.volume ?? 1;
+}
+
 // Audio scrubbing: short enveloped grains at the scrub position.
 let lastGrain = 0;
 function scrubAudio(target) {
@@ -782,10 +822,100 @@ function scrubAudio(target) {
       grain(a.audioBuf, c.in + t - c.start, c.volume ?? 1);
     }
   } else {
-    const a = S.assets[S.source.mediaId]; if (!a) return;
+    const a = S.assets[S.source.mediaId]; const gain = sourceAudioGain(); if (!a || gain <= 0) return;
     if (!a.audioBuf) { a.loadAudio(); return; }
-    grain(a.audioBuf, S.source.t, 1);
+    grain(a.audioBuf, S.source.t, gain);
   }
+}
+
+// ------------------------------------------------------------------ recording
+// A take records from the microphone while the sequence plays from the playhead.
+// Chunks stream to the project folder every second (server.js keeps them in
+// recordings/), so a crash loses at most the last second; on stop the take is
+// placed where it started, on a new audio track if it would overlap a clip.
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function startRecording(trackId) {
+  if (S.rec) return;
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return toast("This browser can't record audio", true);
+  if (S.play) stop(true);
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { return toast('Microphone access was blocked. Allow it for this page in the browser to record.', true); }
+  const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((t) => MediaRecorder.isTypeSupported(t)) || '';
+  let rec;
+  try { rec = await api('POST', `/api/projects/${enc(S.slug)}/recordings`, { trackId, start: S.playhead, mimeType }); }
+  catch (e) { stream.getTracks().forEach((t) => t.stop()); return toast('Could not start recording: ' + e.message, true); }
+  const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  const R = S.rec = { id: rec.id, slug: S.slug, trackId, start: S.playhead, recorder, stream, sending: Promise.resolve(), lost: 0, startedWall: 0 };
+  recorder.ondataavailable = (e) => { if (e.data && e.data.size) R.sending = R.sending.then(() => sendChunk(R, e.data)); };
+  recorder.onstart = () => {
+    R.start = S.playhead; R.startedWall = performance.now();
+    play('program', 1);
+    renderTrackHeads(); requestRender('timeline');
+  };
+  recorder.start(1000);
+  toast(`Recording on ${trackById(trackId).name}. Click the stop button (or press Space) to finish.`);
+}
+
+async function sendChunk(R, blob) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(`/api/projects/${enc(R.slug)}/recordings/${R.id}/chunk`, { method: 'POST', body: blob });
+      if (res.ok) return;
+      throw new Error(String(res.status));
+    } catch {
+      if (attempt >= 5) { R.lost++; toast('Part of the recording could not be saved to disk', true); return; }
+      await sleep(500 * (attempt + 1));
+    }
+  }
+}
+
+async function stopRecording() {
+  const R = S.rec; if (!R || R.stopping) return;
+  R.stopping = true;
+  const stopped = new Promise((res) => R.recorder.addEventListener('stop', res, { once: true }));
+  if (R.recorder.state !== 'inactive') R.recorder.stop();
+  stop(true);
+  await stopped;
+  R.stream.getTracks().forEach((t) => t.stop());
+  await R.sending; // every chunk is on disk before finishing
+  const measured = R.startedWall ? (performance.now() - R.startedWall) / 1000 : 0;
+  const trackName = trackById(R.trackId)?.name || 'audio';
+  const d = new Date(); const p2 = (n) => String(n).padStart(2, '0');
+  const name = `Recording ${trackName} ${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}.${p2(d.getMinutes())}.${p2(d.getSeconds())}`;
+  let meta;
+  try { meta = await api('POST', `/api/projects/${enc(R.slug)}/recordings/${R.id}/finish`, { name }); }
+  catch (e) {
+    S.rec = null; renderTrackHeads(); requestRender('timeline');
+    return toast("The take is saved in the project's recordings folder, but adding it failed: " + e.message, true);
+  }
+  S.rec = null;
+  if (R.slug !== S.slug) return; // project was switched; the take is in that project's bin
+  await refreshMedia();
+  const dur = meta.duration > 0 ? meta.duration : measured;
+  if (dur > 0) placeRecording(meta.id, R.trackId, R.start, dur);
+  renderTrackHeads(); requestRender();
+  toast(R.lost ? 'Recording added, but part of it could not be saved' : 'Recording added to the timeline', !!R.lost);
+}
+
+function placeRecording(mediaId, trackId, start, dur) {
+  mutate('Record audio', () => {
+    let tid = trackById(trackId) ? trackId : P().tracks.find((t) => t.kind === 'audio')?.id;
+    const e = start + dur;
+    const hits = (id) => P().clips.some((c) => c.trackId === id && c.start < e - EPS && end(c) > start + EPS);
+    if (!tid || hits(tid)) {
+      // Keep both: put the take on a new audio track right below this one.
+      const t = { id: 'A' + uid(), kind: 'audio', name: '', muted: false };
+      const at = tid ? P().tracks.findIndex((x) => x.id === tid) + 1 : P().tracks.length;
+      P().tracks.splice(at, 0, t); tid = t.id;
+      // Keep audio track labels in order top to bottom (A1, A2, …); ids don't change.
+      P().tracks.filter((x) => x.kind === 'audio').forEach((x, i) => { x.name = 'A' + (i + 1); });
+    }
+    const c = { id: uid(), mediaId, trackId: tid, start, in: 0, out: dur, linkId: null, volume: 1 };
+    P().clips.push(c); S.selection = new Set([c.id]);
+  });
 }
 
 // ------------------------------------------------------------------ main loop
@@ -795,7 +925,7 @@ function frame() {
     const t = playTime(p);
     if (p.target === 'program') {
       const e = seqEnd();
-      if (p.rate > 0 && t >= e) { S.playhead = e; stop(); }
+      if (p.rate > 0 && t >= e && !S.rec) { S.playhead = e; stop(); }
       else if (p.rate < 0 && t <= 0) { S.playhead = 0; stop(); }
       else {
         S.playhead = t; syncProgramVideo(p, t);
@@ -1154,14 +1284,21 @@ function wireTimeline() {
   cv.addEventListener('pointerup', finish);
   cv.addEventListener('pointercancel', finish);
 
+  // Wheel up/down (or pinch) zooms around the playhead, which stays put on
+  // screen. Shift-wheel or a sideways swipe scrolls in time; Option-wheel
+  // scrolls through tracks.
   cv.addEventListener('wheel', (e) => {
     e.preventDefault();
-    const { x } = localXY(e, cv);
-    if (e.ctrlKey || e.metaKey) { zoomAt(S.zoom * Math.exp(-e.deltaY * 0.01), x); return; }
-    const { contentH } = layout(); const overflow = contentH - cv.clientHeight;
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && overflow > 0 && !e.shiftKey) {
-      S.vscroll = clamp(S.vscroll + e.deltaY, 0, overflow); renderTrackHeads();
-    } else S.scroll = Math.max(0, S.scroll + (e.deltaX || e.deltaY) / S.zoom);
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? cv.clientHeight : 1; // lines/pages → px
+    const dx = e.deltaX * unit, dy = e.deltaY * unit;
+    if (e.altKey) {
+      const overflow = layout().contentH - cv.clientHeight;
+      if (overflow > 0) { S.vscroll = clamp(S.vscroll + dy, 0, overflow); renderTrackHeads(); }
+    } else if (e.shiftKey || Math.abs(dx) > Math.abs(dy)) {
+      S.scroll = Math.max(0, S.scroll + (e.shiftKey && !dx ? dy : dx) / S.zoom);
+    } else {
+      zoomAroundPlayhead(S.zoom * Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.002))); return;
+    }
     S.uiDirty = true; requestRender('timeline');
   }, { passive: false });
 }
@@ -1284,6 +1421,7 @@ function toggleSnap() { S.snap = !S.snap; $('snapBtn').checked = S.snap; S.uiDir
 
 // ------------------------------------------------------------------ projects
 async function openProject(slug) {
+  if (S.rec) await stopRecording();
   if (S.slug) { try { await flushSave(); } catch {} }
   if (S.play) stop();
   const data = await api('GET', `/api/projects/${enc(slug)}`);

@@ -17,7 +17,7 @@ export default function Timeline() {
         <Button variant="subtle" id="addVBtn">+ Video track</Button>
         <Button variant="subtle" id="addABtn">+ Audio track</Button>
         <div className="spacer"></div>
-        <span className="text-ui-small hint" id="tlHint">Drag media here · drag edges to trim · ⌥-drag to unlink</span>
+        <span className="text-ui-small hint" id="tlHint">Drag media here · drag edges to trim · ⌥-drag to unlink · scroll to zoom</span>
         <Button variant="subtle" id="fitBtn" title="Zoom to fit (\)">Fit</Button>
         <input type="range" id="zoomSlider" min="0" max="1000" defaultValue="400" title="Zoom (− / =)" />
       </div>

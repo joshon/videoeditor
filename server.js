@@ -179,6 +179,7 @@ const activeUploads = new Set();
 const queue = []; let processing = null;
 
 async function listMedia(dir) {
+  await recoverRecordings(dir);
   const cache = path.join(dir, 'cache'); const out = [];
   let entries = [];
   try { entries = await fsp.readdir(cache, { withFileTypes: true }); } catch { return out; }
@@ -227,6 +228,87 @@ async function handleUpload(req, res, dir, name) {
     await writeJsonAtomic(metaPath(dir, id), meta).catch(() => {});
     if (!res.headersSent) fail(res, 500, meta.error);
   } finally { activeUploads.delete(key); }
+}
+
+// ---------------------------------------------------------------- recordings
+// A take is streamed here in ~1 s chunks while it records, appended to
+// recordings/<id>.<ext>, so a crash or closed tab loses at most the last chunk.
+// Finishing remuxes it into media/ (the raw file stays in recordings/ as a backup).
+
+const activeRecordings = new Map(); // `${dir}::${id}` -> last activity (ms)
+const RECORDING_IDLE_MS = 30 * 1000;
+const recPath = (dir, id) => path.join(dir, 'recordings', id + '.json');
+// "2026-10-09 17.19.09" in local time, for take names (no colons: they're file names).
+const localStamp = (iso) => { const d = new Date(iso); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}.${p(d.getMinutes())}.${p(d.getSeconds())}`; };
+
+async function startRecording(dir, body) {
+  const id = newId();
+  const ext = /mp4|m4a|aac/.test(String(body.mimeType)) ? '.m4a' : '.webm';
+  await fsp.mkdir(path.join(dir, 'recordings'), { recursive: true });
+  const rec = { id, ext, status: 'recording', startedAt: new Date().toISOString(), trackId: body.trackId || null, start: Number(body.start) || 0, mimeType: body.mimeType || '' };
+  await fsp.writeFile(path.join(dir, 'recordings', id + ext), Buffer.alloc(0));
+  await writeJsonAtomic(recPath(dir, id), rec);
+  activeRecordings.set(`${dir}::${id}`, Date.now());
+  return rec;
+}
+
+// Append one chunk (raw bytes, in order) to the take's file and flush it to disk.
+async function appendRecordingChunk(req, dir, id) {
+  id = path.basename(id);
+  const rec = await readJson(recPath(dir, id), null);
+  if (!rec || rec.status !== 'recording') { const e = new Error('No such recording in progress'); e.code = 404; throw e; }
+  const chunks = []; let size = 0;
+  await new Promise((resolve, reject) => {
+    req.on('data', (c) => { size += c.length; if (size > 64 * 1024 * 1024) { reject(new Error('Chunk too large')); req.destroy(); } else chunks.push(c); });
+    req.on('end', resolve); req.on('error', reject);
+  });
+  const fh = await fsp.open(path.join(dir, 'recordings', id + rec.ext), 'a');
+  try { await fh.write(Buffer.concat(chunks)); await fh.sync(); } finally { await fh.close(); }
+  activeRecordings.set(`${dir}::${id}`, Date.now());
+  return { ok: true, bytes: size };
+}
+
+async function finishRecording(dir, id, name) {
+  id = path.basename(id);
+  const rec = await readJson(recPath(dir, id), null);
+  if (!rec) { const e = new Error('No such recording'); e.code = 404; throw e; }
+  activeRecordings.delete(`${dir}::${id}`);
+  if (rec.mediaId) return readJson(metaPath(dir, rec.mediaId), null); // already finished
+  const raw = path.join(dir, 'recordings', id + rec.ext);
+  const mediaId = newId();
+  const label = safeName(name || `Recording ${localStamp(rec.startedAt)}`);
+  const fileName = `${mediaId}-${label}${rec.ext}`;
+  const mediaFile = path.join(dir, 'media', fileName);
+  await fsp.mkdir(path.join(dir, 'media'), { recursive: true });
+  await fsp.mkdir(path.join(dir, 'cache', mediaId), { recursive: true });
+  // A streamed recording has no duration or seek index; a stream copy writes both.
+  try { await run(FFMPEG, ['-hide_banner', '-y', '-i', raw, '-c', 'copy', mediaFile]); }
+  catch { await fsp.copyFile(raw, mediaFile); }
+  const meta = { id: mediaId, name: label + rec.ext, file: fileName, status: 'queued', progress: 0, importedAt: new Date().toISOString(), recording: id };
+  try { Object.assign(meta, await probe(mediaFile)); } catch {}
+  meta.size = (await fsp.stat(mediaFile)).size;
+  await writeJsonAtomic(metaPath(dir, mediaId), meta);
+  rec.status = 'finished'; rec.mediaId = mediaId; rec.finishedAt = new Date().toISOString();
+  await writeJsonAtomic(recPath(dir, id), rec);
+  enqueue(dir, mediaId);
+  return meta;
+}
+
+// A take whose page went away (crash, closed tab, server restart) is turned into
+// media so it shows up in the bin instead of sitting unseen in recordings/.
+async function recoverRecordings(dir) {
+  let files = [];
+  try { files = (await fsp.readdir(path.join(dir, 'recordings'))).filter((f) => f.endsWith('.json')); } catch { return; }
+  for (const f of files) {
+    const rec = await readJson(path.join(dir, 'recordings', f), null);
+    if (!rec || rec.status !== 'recording') continue;
+    const last = activeRecordings.get(`${dir}::${rec.id}`);
+    if (last && Date.now() - last < RECORDING_IDLE_MS) continue;
+    const st = await fsp.stat(path.join(dir, 'recordings', rec.id + rec.ext)).catch(() => null);
+    if (!st || st.size === 0) { rec.status = 'empty'; await writeJsonAtomic(path.join(dir, 'recordings', f), rec); continue; }
+    try { await finishRecording(dir, rec.id, `Recovered recording ${localStamp(rec.startedAt)}`); }
+    catch (e) { console.error('[recordings] recover', rec.id, e.message); }
+  }
 }
 
 function enqueue(dir, id) {
@@ -498,6 +580,13 @@ const server = http.createServer(async (req, res) => {
         }
         if (sub === 'media' && m === 'GET') return sendJson(res, 200, await listMedia(dir));
         if (sub === 'media' && m === 'PUT') return handleUpload(req, res, dir, url.searchParams.get('name') || 'clip');
+        if (sub === 'recordings' && m === 'POST') {
+          try {
+            if (!parts[4]) return sendJson(res, 200, await startRecording(dir, JSON.parse(await readBody(req) || '{}')));
+            if (parts[5] === 'chunk') return sendJson(res, 200, await appendRecordingChunk(req, dir, parts[4]));
+            if (parts[5] === 'finish') { const { name } = JSON.parse(await readBody(req) || '{}'); return sendJson(res, 200, await finishRecording(dir, parts[4], name)); }
+          } catch (e) { return fail(res, e.code === 404 ? 404 : 500, e.message); }
+        }
         if (sub === 'media' && parts[4] && parts[5] === 'retry' && m === 'POST') { enqueue(dir, parts[4]); return sendJson(res, 200, { ok: true }); }
         if (sub === 'history' && m === 'GET') {
           if (parts[4]) { const f = path.join(dir, 'history', path.basename(parts[4])); return sendJson(res, 200, await readJson(f, null)); }
