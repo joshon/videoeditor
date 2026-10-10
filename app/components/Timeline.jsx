@@ -25,6 +25,10 @@ export default function Timeline() {
         <div className="track-heads" id="trackHeads"></div>
         <div className="timeline-canvas-wrap" id="tlWrap"><canvas id="tlCanvas"></canvas></div>
       </div>
+      <div className="timeline-scroll-row">
+        <div className="timeline-scroll-gap"></div>
+        <div className="timeline-scroll" id="tlScroll" title="Drag to move along the timeline; click to jump"><div className="timeline-thumb" id="tlThumb"></div></div>
+      </div>
     </section>
   );
 }

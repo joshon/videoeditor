@@ -23,6 +23,7 @@ const nextHandle = nextApp.getRequestHandler();
 const FFMPEG = process.env.FFMPEG || 'ffmpeg';
 const FFPROBE = process.env.FFPROBE || 'ffprobe';
 const SNAPSHOT_INTERVAL_MS = 30 * 1000;
+const SETTINGS_FILE = path.join(PROJECTS_DIR, '.cutroom-settings.json');
 
 fs.mkdirSync(PROJECTS_DIR, { recursive: true });
 
@@ -243,7 +244,8 @@ const localStamp = (iso) => { const d = new Date(iso); const p = (n) => String(n
 
 async function startRecording(dir, body) {
   const id = newId();
-  const ext = /mp4|m4a|aac/.test(String(body.mimeType)) ? '.m4a' : '.webm';
+  const mime = String(body.mimeType || '');
+  const ext = /mp4|m4a|aac/.test(mime) ? (/^video\//.test(mime) ? '.mp4' : '.m4a') : '.webm';
   await fsp.mkdir(path.join(dir, 'recordings'), { recursive: true });
   const rec = { id, ext, status: 'recording', startedAt: new Date().toISOString(), trackId: body.trackId || null, start: Number(body.start) || 0, mimeType: body.mimeType || '' };
   await fsp.writeFile(path.join(dir, 'recordings', id + ext), Buffer.alloc(0));
@@ -556,6 +558,12 @@ const server = http.createServer(async (req, res) => {
     const m = req.method;
 
     if (parts[0] === 'api') {
+      // App-wide settings (chosen microphone and camera), kept on disk next to the projects.
+      if (parts[1] === 'settings' && m === 'GET') return sendJson(res, 200, await readJson(SETTINGS_FILE, {}));
+      if (parts[1] === 'settings' && m === 'PUT') {
+        const next = { ...(await readJson(SETTINGS_FILE, {})), ...JSON.parse(await readBody(req) || '{}') };
+        await writeJsonAtomic(SETTINGS_FILE, next); return sendJson(res, 200, next);
+      }
       if (parts[1] === 'info' && m === 'GET') return sendJson(res, 200, { projectsDir: PROJECTS_DIR, presets: Object.fromEntries(Object.entries(PRESETS).map(([k, v]) => [k, { label: v.label, ext: v.ext, audioOnly: !!v.audioOnly }])) });
       if (parts[1] === 'projects' && parts.length === 2) {
         if (m === 'GET') return sendJson(res, 200, await listProjects());

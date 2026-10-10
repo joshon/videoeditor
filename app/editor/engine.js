@@ -3,6 +3,8 @@
 // frames come from a per-clip JPEG frame cache drawn to canvas, refined by
 // exact seeks on a short-GOP proxy, with audio "grains" while you drag.
 
+import { getInputStream } from './inputs';
+
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const EPS = 1e-6;
@@ -61,7 +63,7 @@ function readTheme() {
     black: v('--primitive-basics-core-black'), missing: v('--cb-disabled-bg'),
     mono: v('--font-mono') || 'monospace', sans: v('--font-sans') || 'sans-serif',
     codeSize: px('--typography-code-medium-font-size') || 12, uiSize: px('--typography-ui-medium-font-size') || 12,
-    radius: px('--radius-sm') || 6, line: px('--border-md') || 2, lineThin: px('--border-md-sm') || 1.25, lineThick: px('--border-lg') || 3,
+    radius: px('--radius-sm') || 6, pad: px('--spacing-md') || 12, line: px('--border-md') || 2, lineThin: px('--border-md-sm') || 1.25, lineThick: px('--border-lg') || 3,
   };
   RULER_H = px('--height-sm') || 32; VH = px('--height-lg') || 64; AH = px('--height-md') || 48;
   GAP = px('--spacing-sm') || 10; LABEL_H = px('--spacing-xl') || 16;
@@ -278,6 +280,14 @@ function renderProgram() {
     drawAssetFrame(ctx, a, clip.in + t - clip.start, rx, ry, rw, rh, 'program', playing);
     ctx.restore();
   }
+  // While recording the camera, show it picture-in-picture in the bottom right.
+  const live = S.rec && S.rec.preview;
+  if (live && live.readyState >= 2 && live.videoWidth) {
+    const pw = rw * 0.3, ph = (pw * live.videoHeight) / live.videoWidth;
+    const px = rx + rw - pw - C.pad, py = ry + rh - ph - C.pad;
+    ctx.drawImage(live, px, py, pw, ph);
+    ctx.strokeStyle = C.playhead; ctx.lineWidth = C.line; ctx.strokeRect(px, py, pw, ph);
+  }
   $('programTc').textContent = fmtTC(t);
   $('programDur').textContent = fmtTC(seqEnd());
 }
@@ -428,6 +438,8 @@ function renderTimeline() {
   }
   ctx.globalAlpha = 1;
 
+  updateScrollbar(w);
+
   // Playhead
   const px = Math.round(xOf(S.playhead)) + 0.5;
   ctx.fillStyle = C.playhead; ctx.fillRect(px - C.line / 2, 0, C.line, h);
@@ -487,8 +499,8 @@ function renderTrackHeads() {
     const recHere = S.rec && S.rec.trackId === r.track.id;
     d.innerHTML = `<span class="tname text-labels-medium">${escapeHtml(r.track.name)}</span>
       ${dsToggle(isV ? 'Hide' : 'Mute', !!pressed, isV ? 'Hide this track' : 'Mute this track')}
-      ${isV ? '' : dsIconButton(recHere ? 'primary' : 'subtle', recHere ? 'stop' : 'mic', 'rec', recHere ? 'Stop recording' : 'Record onto this track from the playhead')}`;
-    if (!isV) d.querySelector('.rec').onclick = () => {
+      ${dsIconButton(recHere ? 'primary' : 'subtle', recHere ? 'stop' : isV ? 'videocam' : 'mic', 'rec', recHere ? 'Stop recording' : isV ? 'Record the camera onto this track from the playhead' : 'Record the microphone onto this track from the playhead')}`;
+    d.querySelector('.rec').onclick = () => {
       if (!S.rec) startRecording(r.track.id);
       else if (S.rec.trackId === r.track.id) stopRecording();
       else toast(`Already recording on ${trackById(S.rec.trackId)?.name || 'another track'}`);
@@ -838,17 +850,30 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function startRecording(trackId) {
   if (S.rec) return;
-  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return toast("This browser can't record audio", true);
+  const withVideo = trackById(trackId)?.kind === 'video';
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return toast("This browser can't record here", true);
   if (S.play) stop(true);
   let stream;
-  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch { return toast('Microphone access was blocked. Allow it for this page in the browser to record.', true); }
-  const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((t) => MediaRecorder.isTypeSupported(t)) || '';
+  try { stream = await getInputStream({ audio: true, video: withVideo }); }
+  catch (e) {
+    const what = withVideo ? 'Camera or microphone' : 'Microphone';
+    return toast(`${what} unavailable (${e.name}). Check the Inputs dialog, and that this app is allowed to use them in System Settings › Privacy & Security.`, true);
+  }
+  const candidates = withVideo
+    ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4']
+    : ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+  const mimeType = candidates.find((t) => MediaRecorder.isTypeSupported(t)) || '';
   let rec;
   try { rec = await api('POST', `/api/projects/${enc(S.slug)}/recordings`, { trackId, start: S.playhead, mimeType }); }
   catch (e) { stream.getTracks().forEach((t) => t.stop()); return toast('Could not start recording: ' + e.message, true); }
-  const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-  const R = S.rec = { id: rec.id, slug: S.slug, trackId, start: S.playhead, recorder, stream, sending: Promise.resolve(), lost: 0, startedWall: 0 };
+  const recorder = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), ...(withVideo ? { videoBitsPerSecond: 8e6 } : {}) });
+  const R = S.rec = { id: rec.id, slug: S.slug, trackId, withVideo, start: S.playhead, recorder, stream, preview: null, sending: Promise.resolve(), lost: 0, startedWall: 0 };
+  if (withVideo) {
+    // Live camera, drawn as an overlay on the Program viewer while recording.
+    const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = stream;
+    v.addEventListener('loadeddata', () => requestRender('program')); v.play().catch(() => {});
+    R.preview = v;
+  }
   recorder.ondataavailable = (e) => { if (e.data && e.data.size) R.sending = R.sending.then(() => sendChunk(R, e.data)); };
   recorder.onstart = () => {
     R.start = S.playhead; R.startedWall = performance.now();
@@ -856,7 +881,7 @@ async function startRecording(trackId) {
     renderTrackHeads(); requestRender('timeline');
   };
   recorder.start(1000);
-  toast(`Recording on ${trackById(trackId).name}. Click the stop button (or press Space) to finish.`);
+  toast(`Recording ${withVideo ? 'camera ' : ''}on ${trackById(trackId).name}. Click the stop button (or press Space) to finish.`);
 }
 
 async function sendChunk(R, blob) {
@@ -880,11 +905,12 @@ async function stopRecording() {
   stop(true);
   await stopped;
   R.stream.getTracks().forEach((t) => t.stop());
+  if (R.preview) { R.preview.srcObject = null; R.preview = null; }
   await R.sending; // every chunk is on disk before finishing
   const measured = R.startedWall ? (performance.now() - R.startedWall) / 1000 : 0;
   const trackName = trackById(R.trackId)?.name || 'audio';
   const d = new Date(); const p2 = (n) => String(n).padStart(2, '0');
-  const name = `Recording ${trackName} ${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}.${p2(d.getMinutes())}.${p2(d.getSeconds())}`;
+  const name = `${R.withVideo ? 'Camera' : 'Recording'} ${trackName} ${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}.${p2(d.getMinutes())}.${p2(d.getSeconds())}`;
   let meta;
   try { meta = await api('POST', `/api/projects/${enc(R.slug)}/recordings/${R.id}/finish`, { name }); }
   catch (e) {
@@ -895,26 +921,48 @@ async function stopRecording() {
   if (R.slug !== S.slug) return; // project was switched; the take is in that project's bin
   await refreshMedia();
   const dur = meta.duration > 0 ? meta.duration : measured;
-  if (dur > 0) placeRecording(meta.id, R.trackId, R.start, dur);
+  if (dur > 0) placeTake(meta, R.trackId, R.start, dur);
   renderTrackHeads(); requestRender();
   toast(R.lost ? 'Recording added, but part of it could not be saved' : 'Recording added to the timeline', !!R.lost);
 }
 
-function placeRecording(mediaId, trackId, start, dur) {
-  mutate('Record audio', () => {
-    let tid = trackById(trackId) ? trackId : P().tracks.find((t) => t.kind === 'audio')?.id;
+// Place a finished take where it started. Each part goes on the track that was
+// recorded onto if it's free there, otherwise on a new track next to it, so
+// existing clips are never covered or cut:
+// - picture: the clicked video track, or a new video track just above it;
+// - sound of a camera take: the first audio track free for that span, or a new one at the bottom;
+// - sound of a microphone take: the clicked audio track, or a new one just below it.
+function placeTake(meta, trackId, start, dur) {
+  mutate(meta.hasVideo ? 'Record camera' : 'Record audio', () => {
     const e = start + dur;
-    const hits = (id) => P().clips.some((c) => c.trackId === id && c.start < e - EPS && end(c) > start + EPS);
-    if (!tid || hits(tid)) {
-      // Keep both: put the take on a new audio track right below this one.
-      const t = { id: 'A' + uid(), kind: 'audio', name: '', muted: false };
-      const at = tid ? P().tracks.findIndex((x) => x.id === tid) + 1 : P().tracks.length;
-      P().tracks.splice(at, 0, t); tid = t.id;
-      // Keep audio track labels in order top to bottom (A1, A2, …); ids don't change.
-      P().tracks.filter((x) => x.kind === 'audio').forEach((x, i) => { x.name = 'A' + (i + 1); });
+    const free = (id) => !P().clips.some((c) => c.trackId === id && c.start < e - EPS && end(c) > start + EPS);
+    const addTrack = (kind, at) => {
+      const t = { id: (kind === 'video' ? 'V' : 'A') + uid(), kind, name: '', ...(kind === 'video' ? { hidden: false } : { muted: false }) };
+      P().tracks.splice(at, 0, t); return t.id;
+    };
+    const target = trackById(trackId);
+    let vTid = null, aTid = null;
+    if (meta.hasVideo) {
+      if (target && target.kind === 'video' && free(target.id)) vTid = target.id;
+      else {
+        const at = target && target.kind === 'video' ? P().tracks.indexOf(target) : 0; // above = earlier in the list
+        vTid = addTrack('video', at);
+      }
     }
-    const c = { id: uid(), mediaId, trackId: tid, start, in: 0, out: dur, linkId: null, volume: 1 };
-    P().clips.push(c); S.selection = new Set([c.id]);
+    if (meta.hasAudio) {
+      if (target && target.kind === 'audio') aTid = free(target.id) ? target.id : addTrack('audio', P().tracks.indexOf(target) + 1);
+      else aTid = P().tracks.find((t) => t.kind === 'audio' && free(t.id))?.id || addTrack('audio', P().tracks.length);
+    }
+    // Keep labels in order: video V(n)…V1 top to bottom, audio A1…A(n). Ids don't change.
+    const vs = P().tracks.filter((t) => t.kind === 'video'); vs.forEach((t, i) => { t.name = 'V' + (vs.length - i); });
+    P().tracks.filter((t) => t.kind === 'audio').forEach((t, i) => { t.name = 'A' + (i + 1); });
+    const linkId = vTid && aTid ? uid() : null; const ids = [];
+    for (const tid of [vTid, aTid]) {
+      if (!tid) continue;
+      const c = { id: uid(), mediaId: meta.id, trackId: tid, start, in: 0, out: dur, linkId, volume: 1 };
+      P().clips.push(c); ids.push(c.id);
+    }
+    S.selection = new Set(ids);
   });
 }
 
@@ -1302,6 +1350,39 @@ function wireTimeline() {
     S.uiDirty = true; requestRender('timeline');
   }, { passive: false });
 }
+// The scrollbar under the timeline spans the whole sequence (plus room to keep
+// going); its thumb is the visible part.
+function scrollRange(visible) { return Math.max(seqEnd() + visible * 0.5, S.scroll + visible, visible); }
+function updateScrollbar(viewW) {
+  const bar = $('tlScroll'), thumb = $('tlThumb'); if (!bar) return;
+  const W = bar.clientWidth; const visible = viewW / S.zoom; const total = scrollRange(visible);
+  const tw = Math.max(24, (visible / total) * W);
+  thumb.style.width = tw + 'px';
+  thumb.style.left = Math.min(W - tw, (S.scroll / total) * W) + 'px';
+}
+function wireScrollbar() {
+  const bar = $('tlScroll'), thumb = $('tlThumb');
+  let drag = null;
+  bar.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    const W = bar.clientWidth; const visible = $('tlCanvas').clientWidth / S.zoom; const total = scrollRange(visible);
+    if (e.target !== thumb) {
+      // Click outside the thumb: center the view there, then keep dragging from it.
+      const f = (e.clientX - bar.getBoundingClientRect().left) / W;
+      S.scroll = clamp(f * total - visible / 2, 0, Math.max(0, total - visible));
+    }
+    drag = { x0: e.clientX, scroll0: S.scroll, total, visible, W };
+    bar.setPointerCapture(e.pointerId); S.uiDirty = true; requestRender('timeline');
+  });
+  bar.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    S.scroll = clamp(drag.scroll0 + ((e.clientX - drag.x0) / drag.W) * drag.total, 0, Math.max(0, drag.total - drag.visible));
+    S.uiDirty = true; requestRender('timeline');
+  });
+  const release = () => { drag = null; };
+  bar.addEventListener('pointerup', release); bar.addEventListener('pointercancel', release);
+}
+
 function edgeScroll(x, w) {
   if (x > w - 30) S.scroll += 12 / S.zoom; else if (x < 20 && S.scroll > 0) S.scroll = Math.max(0, S.scroll - 12 / S.zoom);
 }
@@ -1603,7 +1684,7 @@ async function boot() {
   const pool = document.createElement('div'); pool.id = 'videoPool';
   pool.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;overflow:hidden;opacity:0.01;pointer-events:none;';
   document.body.append(pool);
-  readTheme(); wireChrome(); wireTimeline(); wireSource(); wireKeys(); focusPanel('program');
+  readTheme(); wireChrome(); wireTimeline(); wireScrollbar(); wireSource(); wireKeys(); focusPanel('program');
   S.info = await api('GET', '/api/info');
   const want = new URLSearchParams(location.search).get('p');
   const list = await api('GET', '/api/projects');

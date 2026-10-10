@@ -6,12 +6,13 @@ import MediaBin from './components/MediaBin';
 import SourceViewer from './components/SourceViewer';
 import ProgramViewer from './components/ProgramViewer';
 import Timeline from './components/Timeline';
-import { ProjectDialog, ExportDialog, HistoryDialog, SettingsDialog } from './components/Dialogs';
+import { ProjectDialog, ExportDialog, HistoryDialog, SettingsDialog, InputsDialog } from './components/Dialogs';
 
 // The components render the editor's static structure once; the engine
 // (editor/engine.js) then drives it imperatively — canvases, scrubbing,
-// playback, autosave. Nothing here re-renders after mount, so the engine's
-// DOM updates are never overwritten by React.
+// playback, autosave. Nothing the engine touches re-renders after mount, so its
+// DOM updates are never overwritten by React. (The Inputs dialog is the
+// exception: it is self-contained React state and the engine never touches it.)
 export default function Editor() {
   useEffect(() => {
     import('./editor/engine').then((m) => m.startEditor());
@@ -31,6 +32,7 @@ export default function Editor() {
       <ExportDialog />
       <HistoryDialog />
       <SettingsDialog />
+      <InputsDialog />
       <div className="toast text-ui-small" id="toast"></div>
     </div>
   );
