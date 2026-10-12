@@ -158,7 +158,30 @@ async function snapshot(dir, project, reason) {
   lastSnapshot.set(dir, Date.now());
 }
 
-async function saveProject(dir, incoming, { forceSnapshot } = {}) {
+// project.json writes for one project happen one at a time, so a view-state save
+// and an edit save can never interleave and drop each other's changes.
+const projectLocks = new Map();
+function withProjectLock(dir, fn) {
+  const run = (projectLocks.get(dir) || Promise.resolve()).then(fn, fn);
+  projectLocks.set(dir, run.catch(() => {}));
+  return run;
+}
+
+// The view (playhead, zoom, scroll…) isn't an edit: it's merged in without the
+// version check, so two open windows don't trip over each other just by looking.
+function saveProjectUi(dir, ui) {
+  return withProjectLock(dir, async () => {
+    const file = path.join(dir, 'project.json');
+    const current = await readJson(file, null);
+    if (!current) { const e = new Error('Project not found'); e.code = 404; throw e; }
+    current.ui = { ...(current.ui || {}), ...ui };
+    await writeJsonAtomic(file, current);
+    return { ok: true, rev: current.rev };
+  });
+}
+
+function saveProject(dir, incoming, opts) { return withProjectLock(dir, () => saveProjectUnlocked(dir, incoming, opts)); }
+async function saveProjectUnlocked(dir, incoming, { forceSnapshot } = {}) {
   const file = path.join(dir, 'project.json');
   const current = await readJson(file, null);
   if (current && Number(incoming.rev) <= Number(current.rev)) {
@@ -436,6 +459,8 @@ const PRESETS = {
 };
 
 const jobs = new Map();
+const presence = new Map(); // project dir -> Map(session -> { label, seen, since })
+const PRESENCE_TTL_MS = 25 * 1000;
 const even = (n) => Math.max(2, Math.round(n / 2) * 2);
 
 async function buildExport(dir, project, opts) {
@@ -484,7 +509,9 @@ async function buildExport(dir, project, opts) {
   const mixIn = ['[asil]'];
   aClips.forEach((c, k) => {
     const i = addInput(c); const ms = Math.round(c.start * 1000);
-    graph.push(`[${i}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume=${(c.volume ?? 1).toFixed(3)},adelay=${ms}:all=1[a${k}]`);
+    // 10 ms fade in and out so a clip's edges never click (matches playback)
+    const fd = Math.min(0.01, (c.out - c.in) / 4);
+    graph.push(`[${i}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,volume=${(c.volume ?? 1).toFixed(3)},afade=t=in:st=0:d=${fd.toFixed(4)},afade=t=out:st=${(c.out - c.in - fd).toFixed(4)}:d=${fd.toFixed(4)},adelay=${ms}:all=1[a${k}]`);
     mixIn.push(`[a${k}]`);
   });
   graph.push(`${mixIn.join('')}amix=inputs=${mixIn.length}:normalize=0:duration=first:dropout_transition=0[aout]`);
@@ -580,6 +607,10 @@ const server = http.createServer(async (req, res) => {
         const sub = parts[3];
         if (!sub) {
           if (m === 'GET') return sendJson(res, 200, { project: await readJson(path.join(dir, 'project.json')), media: await listMedia(dir), dir });
+          if (m === 'PUT' && url.searchParams.get('ui') === '1') {
+            try { return sendJson(res, 200, await saveProjectUi(dir, JSON.parse(await readBody(req)).ui || {})); }
+            catch (e) { return fail(res, e.code === 404 ? 404 : 500, e.message); }
+          }
           if (m === 'PUT') {
             const body = JSON.parse(await readBody(req));
             try { return sendJson(res, 200, { ok: true, rev: (await saveProject(dir, body, { forceSnapshot: url.searchParams.get('snapshot') === '1' })).rev, savedAt: new Date().toISOString() }); }
@@ -587,6 +618,16 @@ const server = http.createServer(async (req, res) => {
           }
         }
         if (sub === 'media' && m === 'GET') return sendJson(res, 200, await listMedia(dir));
+        // Presence: each open editor checks in every few seconds, so a window can warn
+        // that the same project is open elsewhere (two editors overwrite each other's saves).
+        if (sub === 'presence' && m === 'POST') {
+          const { session, label, leave } = JSON.parse(await readBody(req) || '{}');
+          if (!session) return fail(res, 400, 'session required');
+          const here = presence.get(dir) || new Map(); presence.set(dir, here);
+          if (leave) here.delete(session); else here.set(session, { label: String(label || 'another window').slice(0, 40), seen: Date.now(), since: here.get(session)?.since || Date.now() });
+          for (const [k, v] of here) if (Date.now() - v.seen > PRESENCE_TTL_MS) here.delete(k);
+          return sendJson(res, 200, { others: [...here].filter(([k]) => k !== session).map(([, v]) => ({ label: v.label, since: v.since })) });
+        }
         if (sub === 'media' && m === 'PUT') return handleUpload(req, res, dir, url.searchParams.get('name') || 'clip');
         if (sub === 'recordings' && m === 'POST') {
           try {

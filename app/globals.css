@@ -120,6 +120,17 @@ code { font-family: var(--font-mono); }
 .timeline-thumb:active { cursor: grabbing; }
 #tlCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 
+/* "Also open in another window" banner: floats under the top bar, layout unchanged */
+.presence-banner {
+  position: fixed; top: calc(var(--height-sm) + var(--spacing-md)); left: 50%; transform: translateX(-50%); z-index: 40;
+  display: flex; align-items: center; gap: var(--spacing-md); max-width: min(var(--width-4xl), calc(100vw - 2 * var(--spacing-xl)));
+  padding: var(--spacing-xs) var(--spacing-md) var(--spacing-xs) var(--spacing-xl); border-radius: var(--radius-xl);
+  background: var(--cb-surface-menu-bg); color: var(--cb-surface-menu-text);
+  box-shadow: inset 0 0 0 var(--border-sm) var(--primitive-evaluative-meh-200);
+}
+.presence-banner.conflict { background: var(--cb-error-bg); color: var(--cb-error-text); box-shadow: inset 0 0 0 var(--border-sm) var(--cb-error-border); }
+.presence-banner > * { margin: 0; }
+
 /* Timelines */
 .timeline-switcher { display: flex; align-items: center; gap: var(--spacing-3xs); }
 /* The Dropdown draws its menu in the card surface color, the same as the timeline

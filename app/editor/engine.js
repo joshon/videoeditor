@@ -117,7 +117,7 @@ function requestRender(what = 'all') {
 // ------------------------------------------------------------------ media assets
 let actx = null, master = null;
 function audioCtx() {
-  if (!actx) { actx = new AudioContext({ latencyHint: 'interactive' }); master = actx.createGain(); master.connect(actx.destination); }
+  if (!actx) { actx = new AudioContext({ latencyHint: 'playback' }); master = actx.createGain(); master.connect(actx.destination); }
   return actx;
 }
 
@@ -170,7 +170,7 @@ class Asset {
     if (!this.audioP && this.ready && this.meta.hasAudio) {
       this.audioP = fetch(this.base + 'audio.m4a').then((r) => r.arrayBuffer())
         .then((b) => audioCtx().decodeAudioData(b))
-        .then((buf) => { this.audioBuf = buf; onAudioLoaded(); })
+        .then((buf) => { this.audioBuf = buf; onAudioLoaded(this); })
         .catch((e) => { console.warn('audio decode', e); this.audioP = null; });
     }
     return this.audioP;
@@ -552,7 +552,7 @@ function afterStructureChange() {
   for (const id of [...S.selection]) if (!clipById(id)) S.selection.delete(id);
   if (S.source.clipId && !clipById(S.source.clipId)) S.source.clipId = null;
   if (S.play && S.play.target === 'program') restartPlayback();
-  renderTrackHeads(); updateClipVolumeUI(); updateUndoButtons(); requestRender();
+  renderTrackHeads(); updateClipVolumeUI(); updateUndoButtons(); requestRender(); syncAudioBuffers();
   $('seqInfo').textContent = `${P().settings.width}×${P().settings.height} · ${+P().settings.fps.toFixed(3)} fps`;
 }
 function updateUndoButtons() { $('undoBtn').disabled = !S.undo.length; $('redoBtn').disabled = !S.redo.length; }
@@ -867,6 +867,7 @@ function projectBody(rev) {
 }
 async function save({ snapshot } = {}) {
   if (!P()) return;
+  if (S.conflict) return; // another window saved this project; never overwrite it (the banner offers Reload)
   if (S.saving) { S.saveAgain = true; return; }
   clearTimeout(S.saveTimer);
   S.saving = true; const seq = S.changeSeq; const rev = S.rev + 1;
@@ -878,9 +879,9 @@ async function save({ snapshot } = {}) {
     if (S.savedSeq === S.changeSeq) setSaveState('saved', `Saved to disk ${new Date().toLocaleTimeString()}`);
   } catch (e) {
     S.saveError = e;
-    setSaveState('error', e.status === 409 ? 'Saved from another tab — reload' : 'Not saved — retrying');
+    setSaveState('error', e.status === 409 ? 'Not saved: changed in another window' : 'Not saved — retrying');
     if (e.status !== 409) { clearTimeout(S.saveTimer); S.saveTimer = setTimeout(save, 2000); }
-    else toast(e.message, true);
+    else { S.conflict = true; emitPresence(); }
   } finally {
     S.saving = false;
     if (S.saveAgain) { S.saveAgain = false; save(); }
@@ -888,22 +889,114 @@ async function save({ snapshot } = {}) {
 }
 async function flushSave(opts) {
   while (S.saving) await new Promise((r) => setTimeout(r, 50));
-  if (S.changeSeq !== S.savedSeq || S.uiDirty || (opts && opts.snapshot)) await save(opts);
-  if (S.saveError) throw S.saveError;
+  if (S.changeSeq !== S.savedSeq || (opts && opts.snapshot)) await save(opts);
+  else if (S.uiDirty) await saveUi();
+  if (S.conflict) throw new Error('This project was changed in another window; reload to continue.');
+  if (S.saveError && S.changeSeq !== S.savedSeq) throw S.saveError;
 }
-setInterval(() => { if (S.uiDirty && !S.saving && S.changeSeq === S.savedSeq) save(); }, 5000);
+// View-only changes (playhead, zoom…) save on their own, without a version check.
+async function saveUi() {
+  if (!P() || S.saving || S.conflict) return;
+  S.uiDirty = false;
+  try { await api('PUT', `/api/projects/${enc(S.slug)}?ui=1`, { ui: projectBody(S.rev).ui }); } catch { S.uiDirty = true; }
+}
+setInterval(() => { if (S.uiDirty && !S.saving && S.changeSeq === S.savedSeq) saveUi(); }, 5000);
+// ------------------------------------------------------------------ presence
+// Each open editor checks in with the server, so every window can warn when the
+// same project is also open somewhere else (Edge, Chrome, the Claude app's pane…).
+// Two editors on one project overwrite each other's saves; the server refuses the
+// older one, and this window then stops saving and offers to reload.
+const SESSION = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
+const WINDOW_LABEL = (() => {
+  const ua = navigator.userAgent;
+  if (/Claude|Electron/.test(ua)) return 'the Claude app';
+  if (/Edg\//.test(ua)) return 'Edge';
+  if (/Firefox\//.test(ua)) return 'Firefox';
+  if (/Chrome\//.test(ua)) return 'Chrome';
+  if (/Safari\//.test(ua)) return 'Safari';
+  return 'another browser';
+})();
+function emitPresence() {
+  window.__cutroomPresence = { others: S.others || [], conflict: !!S.conflict, slug: S.slug };
+  window.dispatchEvent(new CustomEvent('cutroom:presence', { detail: window.__cutroomPresence }));
+}
+async function pingPresence(slug = S.slug) {
+  if (!slug) return;
+  try {
+    const r = await api('POST', `/api/projects/${enc(slug)}/presence`, { session: SESSION, label: WINDOW_LABEL });
+    if (slug === S.slug) { S.others = r.others; emitPresence(); }
+  } catch {}
+}
+function leavePresence(slug) {
+  if (!slug) return;
+  navigator.sendBeacon(`/api/projects/${enc(slug)}/presence`, JSON.stringify({ session: SESSION, leave: true }));
+}
+setInterval(() => pingPresence(), 10000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pingPresence(); });
+window.addEventListener('pagehide', () => leavePresence(S.slug));
+window.addEventListener('cutroom:reload-project', () => { S.conflict = true; location.reload(); });
+
 window.addEventListener('beforeunload', (e) => {
-  if (!P()) return;
+  if (!P() || S.conflict) return;
   if (S.rec) { e.preventDefault(); e.returnValue = ''; }
-  if (S.changeSeq !== S.savedSeq || S.uiDirty) {
-    fetch(`/api/projects/${enc(S.slug)}`, { method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(projectBody(S.rev + 1)) });
-    if (S.changeSeq !== S.savedSeq) { e.preventDefault(); e.returnValue = ''; }
+  const headers = { 'Content-Type': 'application/json' };
+  if (S.changeSeq !== S.savedSeq) {
+    fetch(`/api/projects/${enc(S.slug)}`, { method: 'PUT', keepalive: true, headers, body: JSON.stringify(projectBody(S.rev + 1)) });
+    e.preventDefault(); e.returnValue = '';
+  } else if (S.uiDirty) {
+    fetch(`/api/projects/${enc(S.slug)}?ui=1`, { method: 'PUT', keepalive: true, headers, body: JSON.stringify({ ui: projectBody(S.rev).ui }) });
   }
 });
 
 // ------------------------------------------------------------------ playback
 function restartPlayback() { const p = S.play; if (!p) return; const t = playTime(p); stop(true); setPos(p.target, t); play(p.target, p.rate); }
-function onAudioLoaded() { if (S.play && S.play.rate > 0) restartPlayback(); }
+// A sound that finishes loading while playing joins in from where playback is now,
+// without restarting what's already playing (a restart is an audible hiccup).
+function onAudioLoaded(asset) {
+  const p = S.play; if (!p || p.rate <= 0) return;
+  if (p.target === 'program') {
+    const at = actx.currentTime + 0.05;
+    scheduleProgramAudio(p, at, playTime(p) + 0.05 * p.rate, asset);
+  } else if (S.source.mediaId === asset.meta.id) restartPlayback();
+}
+
+function schedBuffer(p, buf, startAt, offset, dur, gain) {
+  if (!buf || dur <= 0 || offset >= buf.duration) return;
+  const src = actx.createBufferSource(); src.buffer = buf; src.playbackRate.value = p.rate;
+  // 10 ms fade in and out so a clip's edges never click
+  const g = actx.createGain(); const real = dur / p.rate; const f = Math.min(0.01, real / 4);
+  g.gain.setValueAtTime(0, startAt); g.gain.linearRampToValueAtTime(gain, startAt + f);
+  g.gain.setValueAtTime(gain, startAt + real - f); g.gain.linearRampToValueAtTime(0, startAt + real);
+  src.connect(g).connect(master);
+  src.start(startAt, Math.max(0, offset), dur); p.nodes.push(src);
+}
+
+// Schedule the program's audible clips from sequence time `t` at audio-clock `at`
+// (only `onlyAsset`'s clips when given). Sounds not decoded yet start loading and
+// join through onAudioLoaded.
+function scheduleProgramAudio(p, at, t, onlyAsset = null) {
+  for (const c of P().clips) {
+    const tr = trackById(c.trackId); if (!tr || tr.kind !== 'audio' || tr.muted || end(c) <= t) continue;
+    const a = S.assets[c.mediaId]; if (!a || (onlyAsset && a !== onlyAsset)) continue;
+    if (!a.audioBuf) { a.loadAudio(); continue; }
+    const delay = Math.max(0, c.start - t) / p.rate; const into = Math.max(0, t - c.start);
+    schedBuffer(p, a.audioBuf, at + delay, c.in + into, len(c) - into, c.volume ?? 1);
+  }
+}
+
+// Media whose sound is heard on the current timeline (clips on audio tracks).
+function heardMediaIds() {
+  return new Set(P().clips.filter((c) => trackById(c.trackId)?.kind === 'audio').map((c) => c.mediaId));
+}
+// Decode only what's heard (plus what the Source viewer plays), and let go of the
+// rest: a long screen recording's decoded sound is hundreds of MB.
+function syncAudioBuffers() {
+  const heard = heardMediaIds(); const src = S.source.mediaId;
+  for (const [id, a] of Object.entries(S.assets)) {
+    if (heard.has(id)) a.loadAudio();
+    else if (id !== src && a.audioBuf && !(S.play && S.play.target === 'source')) { a.audioBuf = null; a.audioP = null; }
+  }
+}
 // Audio hardware clock keeps picture locked to sound; fall back to the wall clock
 // if the audio device isn't running (no output device, suspended context).
 function playTime(p) {
@@ -933,23 +1026,10 @@ function play(target, rate = 1) {
   const p = { target, rate, t0, c0: ctx.currentTime + 0.08, w0: performance.now() / 1000 + 0.08, nodes: [] };
   S.play = p;
   if (rate > 0) {
-    const sched = (buf, startAt, offset, dur, gain) => {
-      if (!buf || dur <= 0 || offset >= buf.duration) return;
-      const src = ctx.createBufferSource(); src.buffer = buf; src.playbackRate.value = rate;
-      const g = ctx.createGain(); g.gain.value = gain; src.connect(g).connect(master);
-      src.start(startAt, Math.max(0, offset), dur); p.nodes.push(src);
-    };
-    if (target === 'program') {
-      for (const c of P().clips) {
-        const tr = trackById(c.trackId); if (!tr || tr.kind !== 'audio' || tr.muted || end(c) <= t0) continue;
-        const a = S.assets[c.mediaId]; if (!a) continue;
-        if (!a.audioBuf) { a.loadAudio(); continue; }
-        const delay = Math.max(0, c.start - t0) / rate; const into = Math.max(0, t0 - c.start);
-        sched(a.audioBuf, p.c0 + delay, c.in + into, len(c) - into, c.volume ?? 1);
-      }
-    } else {
+    if (target === 'program') scheduleProgramAudio(p, p.c0, t0);
+    else {
       const a = S.assets[S.source.mediaId]; const gain = sourceAudioGain();
-      if (gain > 0 && a.audioBuf) sched(a.audioBuf, p.c0, t0, a.meta.duration - t0, gain);
+      if (gain > 0 && a.audioBuf) schedBuffer(p, a.audioBuf, p.c0, t0, a.meta.duration - t0, gain);
       else if (gain > 0) a.loadAudio();
     }
   }
@@ -1230,7 +1310,8 @@ function loadSource(mediaId, clipId = null) {
   $('sourceTitle').textContent = (c ? 'Timeline clip · ' : '') + a.meta.name;
   $('sourceDur').textContent = fmtTC(a.meta.duration, a.meta.fps || seqFps());
   $('srcInsert').hidden = !!c;
-  a.preload(S.source.t, 1, 3); a.loadAudio(); a.loadPeaks();
+  a.preload(S.source.t, 1, 3); a.loadPeaks();
+  if (sourceAudioGain() > 0) a.loadAudio(); // a timeline clip without sound needn't decode the whole file's audio
   updateClipVolumeUI(); markBinActive(); requestRender();
 }
 function sourceMarksFor(id) { const prev = S.source; S.source = { mediaId: id, clipId: null }; const m = sourceMarks(); S.source = prev; return m; }
@@ -1429,7 +1510,7 @@ function applyMediaList(list) {
     else a.meta = m;
     if (m.status === 'ready' && (!prev || prev.status !== 'ready')) {
       a.loadPeaks(); a.preload(Math.min(1, m.duration / 3), 0, 0);
-      if (P().clips.some((c) => c.mediaId === m.id)) a.loadAudio();
+      if (heardMediaIds().has(m.id)) a.loadAudio();
     }
   }
   renderBin(); requestRender();
@@ -1723,6 +1804,7 @@ function toggleSnap() { S.snap = !S.snap; $('snapBtn').checked = S.snap; S.uiDir
 // ------------------------------------------------------------------ projects
 async function openProject(slug) {
   if (S.rec) await stopRecording();
+  if (S.slug && S.slug !== slug) leavePresence(S.slug);
   if (S.slug) { try { await flushSave(); } catch {} }
   if (S.play) stop();
   const data = await api('GET', `/api/projects/${enc(slug)}`);
@@ -1748,9 +1830,9 @@ async function openProject(slug) {
   setSaveState('saved', `Opened from disk`);
   $('sourceTitle').textContent = 'No clip'; $('sourceDur').textContent = ''; $('sourceInOut').innerHTML = '';
   applyMediaList(data.media);
-  for (const c of p.clips) S.assets[c.mediaId] && S.assets[c.mediaId].loadAudio();
   zoomAt(S.zoom, 0); S.scroll = p.ui?.scroll || 0;
   afterStructureChange(); refreshMedia(); emitTimelines();
+  S.conflict = false; S.others = []; emitPresence(); pingPresence();
 }
 
 async function showProjects(required) {
