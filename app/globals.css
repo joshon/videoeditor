@@ -100,7 +100,10 @@ code { font-family: var(--font-mono); }
 .timeline-panel.focused { box-shadow: var(--cb-surface-card-shadow), 0 0 0 var(--border-md) var(--cb-focus-ring); }
 .timeline-toolbar { display: flex; align-items: center; gap: var(--spacing-3xs); padding: var(--spacing-xs) var(--spacing-md); }
 .timeline-toolbar .sep { width: var(--border-sm); height: var(--height-xs); background: var(--cb-surface-plot-border); margin: 0 var(--spacing-xs); }
-.timeline-toolbar .hint { color: var(--cb-secondary_text-text); margin-right: var(--spacing-md); }
+.timeline-toolbar > * { flex-shrink: 0; }
+/* When the toolbar is short of room, the hint gives way before any control does. */
+.timeline-toolbar .hint { color: var(--cb-secondary_text-text); margin-right: var(--spacing-md); flex-shrink: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.timeline-toolbar .spacer { flex-shrink: 1; }
 #zoomSlider { width: var(--width-sm); accent-color: var(--cb-brand-bg); }
 .timeline-body { flex: 1; display: flex; min-height: 0; }
 .track-heads { width: var(--width-sm); flex: none; position: relative; overflow: hidden; }
@@ -116,6 +119,16 @@ code { font-family: var(--font-mono); }
 .timeline-thumb { position: absolute; top: 0; bottom: 0; left: 0; width: 0; border-radius: var(--radius-full); background: var(--cb-surface-card-text); cursor: grab; }
 .timeline-thumb:active { cursor: grabbing; }
 #tlCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+/* Timelines */
+.timeline-switcher { display: flex; align-items: center; gap: var(--spacing-3xs); }
+/* The Dropdown draws its menu in the card surface color, the same as the timeline
+   panel, so the open menu was invisible here. Use the menu surface and a border. */
+.timeline-switcher .input-wrapper { --menu-bg: var(--cb-surface-menu-bg); --menu-border: var(--cb-surface-plot-border); }
+.timeline-list { display: flex; flex-direction: column; gap: var(--spacing-xs); max-height: var(--height-10xl); overflow-y: auto; }
+.timeline-row { display: flex; align-items: center; gap: var(--spacing-md); padding: var(--spacing-3xs) var(--spacing-xs); border-radius: var(--radius-md); }
+.timeline-row.current { background: var(--cb-surface-plot-bg); box-shadow: inset 0 0 0 var(--border-sm) var(--cb-surface-plot-border); }
+.timeline-row .grow { flex: 1; min-width: 0; }
 
 /* Inputs dialog */
 .level-meter { height: var(--spacing-xs); border-radius: var(--radius-full); background: var(--cb-surface-001-bg); overflow: hidden; }

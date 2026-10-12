@@ -596,6 +596,19 @@ const server = http.createServer(async (req, res) => {
           } catch (e) { return fail(res, e.code === 404 ? 404 : 500, e.message); }
         }
         if (sub === 'media' && parts[4] && parts[5] === 'retry' && m === 'POST') { enqueue(dir, parts[4]); return sendJson(res, 200, { ok: true }); }
+        // Cut lists: JSON edit decisions in projects/<p>/cutlists/, written by a person or an
+        // agent and imported into a new timeline by the editor (see README).
+        if (sub === 'cutlists' && m === 'GET') {
+          const cdir = path.join(dir, 'cutlists');
+          if (parts[4]) return sendJson(res, 200, await readJson(path.join(cdir, path.basename(parts[4])), null));
+          const files = (await fsp.readdir(cdir).catch(() => [])).filter((f) => f.endsWith('.json'));
+          const out = [];
+          for (const f of files) {
+            const j = await readJson(path.join(cdir, f), null); const st = await fsp.stat(path.join(cdir, f));
+            out.push({ file: f, name: (j && j.name) || f, clips: j && Array.isArray(j.clips) ? j.clips.length : 0, valid: !!(j && Array.isArray(j.clips)), mtime: st.mtimeMs });
+          }
+          return sendJson(res, 200, out.sort((a, b) => b.mtime - a.mtime));
+        }
         if (sub === 'history' && m === 'GET') {
           if (parts[4]) { const f = path.join(dir, 'history', path.basename(parts[4])); return sendJson(res, 200, await readJson(f, null)); }
           const files = (await fsp.readdir(path.join(dir, 'history')).catch(() => [])).filter((f) => f.endsWith('.json')).sort().reverse();

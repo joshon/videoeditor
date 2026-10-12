@@ -1,10 +1,13 @@
-import { Button, Toggle } from '@ds/components';
+import { Button, Icon, Toggle } from '@ds/components';
+import { TimelineSwitcher } from './Timelines';
 
 // Track headers are built by the engine; clips, ruler and playhead are drawn on #tlCanvas.
 export default function Timeline() {
   return (
     <section className="timeline-panel" id="timelinePanel" tabIndex={0}>
       <div className="timeline-toolbar">
+        <TimelineSwitcher />
+        <span className="sep"></span>
         <Button variant="subtle" id="undoBtn" title="Undo (⌘Z)">Undo</Button>
         <Button variant="subtle" id="redoBtn" title="Redo (⇧⌘Z)">Redo</Button>
         <span className="sep"></span>
@@ -13,6 +16,11 @@ export default function Timeline() {
         <span className="sep"></span>
         <Toggle id="snapBtn" label="Snap" defaultChecked title="Snapping (N)" />
         <Toggle id="linkBtn" label="Link" defaultChecked title="Linked selection — move video and its audio together" />
+        <span className="sep"></span>
+        {/* What moving or deleting a clip does to the clips after it. The engine marks the active one. */}
+        <Button variant="primary" iconOnly id="pushOffBtn" aria-pressed="true" title="Overwrite: a moved clip covers whatever is under it" leftIcon={<Icon name="layers" size="lg" />} />
+        <Button variant="subtle" iconOnly id="pushTrackBtn" aria-pressed="false" title="Push track: moving or deleting a clip also moves everything after it on its track (and its linked audio/video)" leftIcon={<Icon name="keyboard_tab" size="lg" />} />
+        <Button variant="subtle" iconOnly id="pushAllBtn" aria-pressed="false" title="Push all tracks: moving or deleting a clip also moves everything after it on every track" leftIcon={<Icon name="double_arrow" size="lg" />} />
         <span className="sep"></span>
         <Button variant="subtle" id="addVBtn">+ Video track</Button>
         <Button variant="subtle" id="addABtn">+ Audio track</Button>

@@ -78,6 +78,7 @@ const S = {
   selection: new Set(),
   playhead: 0, zoom: 60, scroll: 0, vscroll: 0,
   snap: true, linked: true, focus: 'program',
+  pushMode: 'off', // 'off' (overwrite) | 'track' | 'all': see setPushMode
   source: { mediaId: null, clipId: null, t: 0 },
   play: null, drag: null, mediaDrag: null, dropTarget: null, snapLine: null,
   rec: null, // the take being recorded (see startRecording)
@@ -441,6 +442,19 @@ function renderTimeline() {
 
   updateScrollbar(w);
 
+  // Markers (script beats from a cut list): a flag and a label on the ruler.
+  for (const k of P().markers || []) {
+    const mx = Math.round(xOf(k.time)) + 0.5; if (mx < -200 || mx > w) continue;
+    ctx.fillStyle = C.mark; ctx.globalAlpha = 0.5; ctx.fillRect(mx - 0.5, RULER_H, 1, h); ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.moveTo(mx, RULER_H); ctx.lineTo(mx + 7, RULER_H - 5); ctx.lineTo(mx, RULER_H - 10); ctx.fill();
+    if (k.label) {
+      ctx.font = `${C.uiSize}px ${C.sans}`; ctx.textBaseline = 'middle';
+      const tw = ctx.measureText(k.label).width;
+      ctx.fillStyle = C.ruler; ctx.fillRect(mx + 8, RULER_H - 13, tw + 6, 13);
+      ctx.fillStyle = C.mark; ctx.fillText(k.label, mx + 11, RULER_H - 6);
+    }
+  }
+
   // Playhead
   const px = Math.round(xOf(S.playhead)) + 0.5;
   ctx.fillStyle = C.playhead; ctx.fillRect(px - C.line / 2, 0, C.line, h);
@@ -514,7 +528,7 @@ function renderTrackHeads() {
 }
 
 // ------------------------------------------------------------------ edits / undo
-function editState() { return JSON.stringify({ tracks: P().tracks, clips: P().clips, settings: P().settings, bin: P().bin }); }
+function editState() { return JSON.stringify({ tracks: P().tracks, clips: P().clips, settings: P().settings, bin: P().bin, markers: P().markers }); }
 function restoreState(json) { Object.assign(P(), JSON.parse(json)); afterStructureChange(); }
 
 function mutate(label, fn) {
@@ -620,12 +634,16 @@ function splitAt(t) {
   });
 }
 
+// Delete; in a push mode (or with Shift) the gap closes up. 'all' closes it on
+// every track, as far as each track has room.
 function deleteSelected(ripple) {
   if (!S.selection.size) return;
-  mutate(ripple ? 'Ripple delete' : 'Delete', () => {
+  const mode = S.pushMode !== 'off' ? S.pushMode : ripple ? 'track' : 'off';
+  mutate(mode === 'off' ? 'Delete' : 'Ripple delete', () => {
     const gone = P().clips.filter((c) => S.selection.has(c.id));
     P().clips = P().clips.filter((c) => !S.selection.has(c.id));
-    if (ripple) {
+    if (mode === 'all') closeGapsAllTracks(gone.map((c) => [c.start, end(c)]));
+    else if (mode === 'track') {
       const byTrack = {};
       for (const c of gone) (byTrack[c.trackId] = byTrack[c.trackId] || []).push([c.start, end(c)]);
       for (const c of P().clips) {
@@ -636,6 +654,194 @@ function deleteSelected(ripple) {
     }
     S.selection.clear();
   });
+}
+
+// ------------------------------------------------------------------ timelines
+// A project holds several timelines. The active one is the top-level tracks/clips/
+// settings/markers (what saving, playback and export use); the rest are kept in
+// P().timelines with their own view position. Each keeps its own undo history
+// for the session. Switching, adding and renaming are saved but not undoable;
+// every version is still in Versions.
+
+function stashActive() {
+  const p = P();
+  return { id: p.timeline.id, name: p.timeline.name, tracks: p.tracks, clips: p.clips, settings: p.settings, markers: p.markers,
+    ui: { playhead: S.playhead, zoom: S.zoom, scroll: S.scroll } };
+}
+function loadTimeline(t) {
+  const p = P();
+  p.timeline = { id: t.id, name: t.name };
+  p.tracks = t.tracks; p.clips = t.clips; p.settings = t.settings; p.markers = t.markers || [];
+  S.playhead = t.ui?.playhead || 0; S.scroll = t.ui?.scroll || 0; zoomAt(t.ui?.zoom || S.zoom, 0); S.scroll = t.ui?.scroll || 0;
+  const u = S.undoByTimeline[t.id] || { undo: [], redo: [] }; S.undo = u.undo; S.redo = u.redo;
+  S.selection = new Set(); S.source.clipId = null;
+}
+function switchTimeline(id) {
+  const p = P(); if (id === p.timeline.id) return;
+  const target = p.timelines.find((t) => t.id === id); if (!target) return;
+  if (S.rec) return toast('Stop recording before switching timelines', true);
+  if (S.play) stop();
+  S.undoByTimeline[p.timeline.id] = { undo: S.undo, redo: S.redo };
+  p.timelines = p.timelines.filter((t) => t.id !== id).concat(stashActive());
+  loadTimeline(target);
+  afterStructureChange(); markDirty(); emitTimelines(); updateClipVolumeUI();
+  toast(`Timeline: ${target.name}`);
+}
+function freshTracks() {
+  return [
+    { id: 'V2', kind: 'video', name: 'V2', hidden: false }, { id: 'V1', kind: 'video', name: 'V1', hidden: false },
+    { id: 'A1', kind: 'audio', name: 'A1', muted: false }, { id: 'A2', kind: 'audio', name: 'A2', muted: false },
+  ];
+}
+function uniqueTimelineName(base) {
+  const names = new Set([P().timeline.name, ...P().timelines.map((t) => t.name)]);
+  let n = base, i = 2; while (names.has(n)) n = `${base} ${i++}`;
+  return n;
+}
+function addTimeline(t) {
+  t.id = 'tl' + uid(); t.name = uniqueTimelineName(t.name || 'Timeline');
+  P().timelines.push(t); switchTimeline(t.id);
+}
+function newTimeline() { addTimeline({ name: 'Timeline', tracks: freshTracks(), clips: [], settings: { ...P().settings }, markers: [] }); }
+function duplicateTimeline() {
+  const a = clone(stashActive());
+  addTimeline({ ...a, name: `${a.name} copy` });
+}
+function renameTimeline(id, name) {
+  name = String(name || '').trim(); if (!name) return;
+  const p = P(); const t = id === p.timeline.id ? p.timeline : p.timelines.find((x) => x.id === id); if (!t) return;
+  t.name = name; markDirty(); emitTimelines();
+}
+// The Timelines dialog and the toolbar switcher are React; they hear about
+// timelines through this event and ask for changes with 'cutroom:timeline'.
+function emitTimelines() {
+  const p = P(); if (!p) return;
+  const list = [{ id: p.timeline.id, name: p.timeline.name }, ...p.timelines.map((t) => ({ id: t.id, name: t.name }))]
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  window.__cutroomTimelines = { slug: S.slug, active: p.timeline.id, list };
+  window.dispatchEvent(new CustomEvent('cutroom:timelines', { detail: window.__cutroomTimelines }));
+}
+
+// Build a new timeline from a cut list (projects/<p>/cutlists/<file>.json):
+// { name, settings?: {width,height,fps}, markers?: [{time,label}],
+//   clips: [{ media, start, in, out, video?: 'V1', audio?: 'A1', track?: 'V1', volume?, note? }] }
+// `media` is a media id or a file name as shown in the bin. A clip with both
+// `video` and `audio` is placed as a linked pair. Later clips overwrite earlier ones.
+async function importCutList(file) {
+  let cl;
+  try { cl = await api('GET', `/api/projects/${enc(S.slug)}/cutlists/${enc(file)}`); } catch (e) { return toast('Could not read the cut list: ' + e.message, true); }
+  if (!cl || !Array.isArray(cl.clips)) return toast('That cut list has no clips array', true);
+  const byName = {}; for (const m of Object.values(S.media)) { byName[m.name] = m; byName[m.name.toLowerCase()] = m; }
+  const find = (ref) => S.media[ref] || byName[ref] || byName[String(ref).toLowerCase()];
+  const tracks = freshTracks(); const clips = []; const problems = [];
+  const ensureTrack = (name) => {
+    let t = tracks.find((x) => x.name === name); if (t) return t.id;
+    const kind = /^V/i.test(name) ? 'video' : 'audio';
+    t = { id: (kind === 'video' ? 'V' : 'A') + uid(), kind, name, ...(kind === 'video' ? { hidden: false } : { muted: false }) };
+    if (kind === 'video') tracks.unshift(t); else tracks.push(t);
+    return t.id;
+  };
+  const sortTracks = () => {
+    const num = (t) => parseInt(t.name.slice(1), 10) || 0;
+    const vs = tracks.filter((t) => t.kind === 'video').sort((a, b) => num(b) - num(a));
+    const as = tracks.filter((t) => t.kind === 'audio').sort((a, b) => num(a) - num(b));
+    tracks.splice(0, tracks.length, ...vs, ...as);
+  };
+  const place = (trackId, c) => {
+    // overwrite anything already placed under this clip on this track
+    const s = c.start, e = c.start + (c.out - c.in);
+    for (const o of [...clips]) {
+      if (o.trackId !== trackId) continue;
+      const os = o.start, oe = o.start + (o.out - o.in);
+      if (oe <= s + EPS || os >= e - EPS) continue;
+      if (os >= s - EPS && oe <= e + EPS) clips.splice(clips.indexOf(o), 1);
+      else if (os < s && oe > e) { clips.push({ ...o, id: uid(), linkId: null, start: e, in: o.in + (e - os) }); o.out = o.in + (s - os); }
+      else if (os < s) o.out = o.in + (s - os);
+      else { o.in += e - os; o.start = e; }
+    }
+    clips.push({ ...c, trackId });
+  };
+  cl.clips.forEach((x, i) => {
+    const m = find(x.media);
+    if (!m) { problems.push(`clip ${i + 1}: no media "${x.media}"`); return; }
+    const D = m.duration || 0;
+    const inn = clamp(Number(x.in) || 0, 0, D), out = clamp(x.out == null ? D : Number(x.out), 0, D);
+    if (!(out - inn > 1e-3)) { problems.push(`clip ${i + 1}: empty range`); return; }
+    const start = Math.max(0, Number(x.start) || 0);
+    const v = x.video || (x.track && /^V/i.test(x.track) ? x.track : null);
+    const a = x.audio || (x.track && /^A/i.test(x.track) ? x.track : null);
+    const linkId = v && a ? uid() : null;
+    const base = { mediaId: m.id, start, in: inn, out, linkId, volume: x.volume ?? 1, ...(x.note ? { note: String(x.note) } : {}) };
+    if (v && m.hasVideo) place(ensureTrack(v), { ...base, id: uid() });
+    if (a && m.hasAudio) place(ensureTrack(a), { ...base, id: uid() });
+    if (!v && !a) problems.push(`clip ${i + 1}: no track given`);
+  });
+  sortTracks();
+  const settings = { ...P().settings, ...(cl.settings || {}), auto: false };
+  const markers = (cl.markers || []).filter((k) => k && isFinite(k.time)).map((k) => ({ time: Math.max(0, Number(k.time)), label: String(k.label || '') }));
+  addTimeline({ name: cl.name || file.replace(/\.json$/, ''), tracks, clips, settings, markers, ui: { playhead: 0, zoom: S.zoom, scroll: 0 } });
+  zoomFit();
+  toast(problems.length ? `Imported with ${problems.length} problem(s): ${problems.slice(0, 3).join('; ')}` : `Imported "${cl.name || file}" (${clips.length} clips)`, problems.length > 0);
+}
+
+window.addEventListener('cutroom:timeline', (e) => {
+  const d = e.detail || {}; if (!P()) return;
+  if (d.action === 'switch') switchTimeline(d.id);
+  else if (d.action === 'new') newTimeline();
+  else if (d.action === 'duplicate') duplicateTimeline();
+  else if (d.action === 'rename') renameTimeline(d.id, d.name);
+  else if (d.action === 'import') importCutList(d.file);
+});
+
+// ------------------------------------------------------------------ push modes
+// 'off': moving a clip overwrites what's under it. 'track': the clip and every
+// clip after it on its track (and its linked clips' tracks) move together.
+// 'all': every clip after it, on every track, moves with it.
+const PUSH_BUTTONS = { off: 'pushOffBtn', track: 'pushTrackBtn', all: 'pushAllBtn' };
+function setPushMode(mode, { restoring = false } = {}) {
+  S.pushMode = PUSH_BUTTONS[mode] ? mode : 'off'; if (!restoring) S.uiDirty = true;
+  for (const [m, id] of Object.entries(PUSH_BUTTONS)) {
+    const b = $(id); if (!b) continue;
+    b.classList.toggle('btn-primary', m === S.pushMode); b.classList.toggle('btn-subtle', m !== S.pushMode);
+    b.setAttribute('aria-pressed', String(m === S.pushMode));
+  }
+}
+
+// The clips that move with a dragged selection in a push mode, and how far left
+// the block may go before it would cover an earlier clip.
+function pushBlock(orig) {
+  if (S.pushMode === 'off') return { pushing: false, followers: [], lo: 0 };
+  const ids = new Set(orig.map((o) => o.id));
+  const from = Math.min(...orig.map((o) => o.start));
+  const tracks = S.pushMode === 'all' ? new Set(P().tracks.map((t) => t.id)) : new Set(orig.map((o) => o.trackId));
+  const followers = P().clips.filter((c) => !ids.has(c.id) && tracks.has(c.trackId) && c.start >= from - EPS).map((c) => ({ ...c }));
+  const block = [...orig, ...followers]; const inBlock = new Set(block.map((o) => o.id));
+  let lo = -Math.min(...block.map((o) => o.start));
+  for (const b of block) {
+    for (const c of P().clips) {
+      if (inBlock.has(c.id) || c.trackId !== b.trackId || end(c) > b.start + EPS) continue;
+      lo = Math.max(lo, end(c) - b.start);
+    }
+  }
+  return { pushing: true, followers, lo: Math.min(0, lo) };
+}
+
+// Close the gaps left by deleted ranges on every track. Each track moves its
+// later clips left by the gap, or as far as it can without covering a clip.
+function closeGapsAllTracks(ranges) {
+  const gaps = ranges.sort((a, b) => b[0] - a[0]); // latest first, so earlier gaps don't move later ones twice
+  for (const [gs, ge] of gaps) {
+    const len = ge - gs;
+    for (const t of P().tracks) {
+      const after = P().clips.filter((c) => c.trackId === t.id && c.start >= ge - EPS);
+      if (!after.length) continue;
+      const first = Math.min(...after.map((c) => c.start));
+      const before = P().clips.filter((c) => c.trackId === t.id && c.start < ge - EPS);
+      const room = first - Math.max(0, ...before.map((c) => Math.min(end(c), first)));
+      const shift = Math.min(len, room);
+      for (const c of after) c.start -= shift;
+    }
+  }
 }
 
 function trimSelectedToPlayhead(edge) {
@@ -657,7 +863,7 @@ function markDirty() {
   clearTimeout(S.saveTimer); S.saveTimer = setTimeout(save, 350);
 }
 function projectBody(rev) {
-  return { ...P(), rev, ui: { playhead: S.playhead, zoom: S.zoom, scroll: S.scroll, snap: S.snap, linked: S.linked } };
+  return { ...P(), rev, ui: { playhead: S.playhead, zoom: S.zoom, scroll: S.scroll, snap: S.snap, linked: S.linked, push: S.pushMode } };
 }
 async function save({ snapshot } = {}) {
   if (!P()) return;
@@ -1273,7 +1479,8 @@ function wireTimeline() {
     } else {
       let ids = new Set(e.altKey ? [c.id] : [...S.selection]);
       if (S.linked && !e.altKey) for (const id of [...ids]) for (const p of partners(clipById(id))) ids.add(p.id);
-      S.drag = { type: 'move', x0: x, y0: y, before, started: false, grab: { ...c }, orig: [...ids].map((id) => ({ ...clipById(id) })) };
+      const orig = [...ids].map((id) => ({ ...clipById(id) }));
+      S.drag = { type: 'move', x0: x, y0: y, before, started: false, grab: { ...c }, orig, ...pushBlock(orig) };
     }
     requestRender();
   });
@@ -1299,11 +1506,18 @@ function wireTimeline() {
     if (d.type === 'move') {
       if (!d.started && Math.hypot(x - d.x0, y - d.y0) < 4) return;
       d.started = true; cv.style.cursor = 'grabbing';
-      const ids = new Set(d.orig.map((o) => o.id));
+      const ids = new Set([...d.orig, ...d.followers].map((o) => o.id));
+      const lo = d.pushing ? d.lo : -Math.min(...d.orig.map((o) => o.start));
       let dt = tOf(x) - tOf(d.x0);
-      dt = Math.max(dt, -Math.min(...d.orig.map((o) => o.start)));
+      dt = Math.max(dt, lo);
       const cands = []; for (const o of d.orig) cands.push(o.start + dt, end(o) + dt);
-      dt = qt(dt + snapDelta(cands, ids)); dt = Math.max(dt, -Math.min(...d.orig.map((o) => o.start)));
+      dt = qt(dt + snapDelta(cands, ids)); dt = Math.max(dt, lo);
+      if (d.pushing) {
+        // Push: the clip and everything after it on the affected tracks move as one block.
+        for (const o of [...d.orig, ...d.followers]) clipById(o.id).start = o.start + dt;
+        requestRender('timeline'); requestRender('program'); edgeScroll(x, cv.clientWidth);
+        return;
+      }
       // Track change for clips of the grabbed clip's kind.
       const kind = trackById(d.grab.trackId).kind; const kt = P().tracks.filter((t) => t.kind === kind);
       const { rows } = layout(); const row = rows.find((r) => y >= r.y && y < r.y + r.h && r.track.kind === kind);
@@ -1326,9 +1540,12 @@ function wireTimeline() {
     if (!d) return;
     if (d.type === 'trim') commit(d.edge === 'in' ? 'Trim start' : 'Trim end', d.before);
     if (d.type === 'move' && d.started) {
-      const ids = new Set(d.orig.map((o) => o.id));
-      for (const id of ids) { const c = clipById(id); overwrite(c.trackId, c.start, end(c), ids); }
-      commit('Move clip', d.before);
+      if (d.pushing) commit(S.pushMode === 'all' ? 'Push all tracks' : 'Push track', d.before);
+      else {
+        const ids = new Set(d.orig.map((o) => o.id));
+        for (const id of ids) { const c = clipById(id); overwrite(c.trackId, c.start, end(c), ids); }
+        commit('Move clip', d.before);
+      }
     }
     requestRender();
   };
@@ -1515,14 +1732,17 @@ async function openProject(slug) {
   p.tracks = p.tracks || []; p.clips = p.clips || []; p.bin = p.bin || { marks: {}, hidden: [] };
   p.bin.marks = p.bin.marks || {}; p.bin.hidden = p.bin.hidden || [];
   p.settings = p.settings || { width: 1920, height: 1080, fps: 30, auto: true };
+  // The active timeline lives at the top level (tracks, clips, settings, markers),
+  // so saving and export always see it; the others wait in p.timelines.
+  p.markers = p.markers || []; p.timeline = p.timeline || { id: 'main', name: 'Main' }; p.timelines = p.timelines || [];
   Object.assign(S, {
     slug, project: p, dir: data.dir, rev: p.rev || 0, changeSeq: 0, savedSeq: 0, uiDirty: false,
-    media: {}, assets: {}, undo: [], redo: [], selection: new Set(),
+    media: {}, assets: {}, undo: [], redo: [], undoByTimeline: {}, selection: new Set(),
     playhead: p.ui?.playhead || 0, zoom: p.ui?.zoom || 60, scroll: p.ui?.scroll || 0, vscroll: 0,
-    snap: p.ui?.snap ?? true, linked: p.ui?.linked ?? true,
+    snap: p.ui?.snap ?? true, linked: p.ui?.linked ?? true, pushMode: p.ui?.push || 'off',
     source: { mediaId: null, clipId: null, t: 0 },
   });
-  $('snapBtn').checked = S.snap; $('linkBtn').checked = S.linked;
+  $('snapBtn').checked = S.snap; $('linkBtn').checked = S.linked; setPushMode(S.pushMode, { restoring: true });
   $('projectName').textContent = p.name; document.title = `${p.name} — Cutroom`;
   history.replaceState(null, '', `?p=${enc(slug)}`);
   setSaveState('saved', `Opened from disk`);
@@ -1530,7 +1750,7 @@ async function openProject(slug) {
   applyMediaList(data.media);
   for (const c of p.clips) S.assets[c.mediaId] && S.assets[c.mediaId].loadAudio();
   zoomAt(S.zoom, 0); S.scroll = p.ui?.scroll || 0;
-  afterStructureChange(); refreshMedia();
+  afterStructureChange(); refreshMedia(); emitTimelines();
 }
 
 async function showProjects(required) {
@@ -1624,10 +1844,11 @@ async function showHistory() {
       const snap = await api('GET', `/api/projects/${enc(S.slug)}/history/${enc(f)}`);
       await api('POST', `/api/projects/${enc(S.slug)}/snapshot/before-restore`);
       mutate('Restore version', () => {
-        P().tracks = snap.tracks; P().clips = snap.clips; P().settings = snap.settings;
+        P().tracks = snap.tracks; P().clips = snap.clips; P().settings = snap.settings; P().markers = snap.markers || [];
+        if (snap.timeline) { P().timeline = snap.timeline; P().timelines = snap.timelines || []; }
         P().bin = snap.bin || { marks: {}, hidden: [] };
       });
-      renderBin(); dlg.close(); toast(`Restored version from ${when} (⌘Z to undo)`);
+      emitTimelines(); renderBin(); dlg.close(); toast(`Restored version from ${when} (⌘Z to undo)`);
     };
     el.append(b);
   }
@@ -1659,6 +1880,7 @@ function wireChrome() {
   $('splitBtn').onclick = () => splitAt(S.playhead);
   $('deleteBtn').onclick = () => deleteSelected(false);
   $('snapBtn').onchange = toggleSnap;
+  for (const [m, id] of Object.entries(PUSH_BUTTONS)) $(id).onclick = () => setPushMode(m);
   $('linkBtn').onchange = () => { S.linked = $('linkBtn').checked; S.uiDirty = true; };
   $('fitBtn').onclick = zoomFit;
   $('zoomSlider').oninput = (e) => zoomAroundPlayhead(ZMIN * Math.pow(ZMAX / ZMIN, e.target.value / 1000));

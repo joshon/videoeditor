@@ -7,6 +7,7 @@ import SourceViewer from './components/SourceViewer';
 import ProgramViewer from './components/ProgramViewer';
 import Timeline from './components/Timeline';
 import { ProjectDialog, ExportDialog, HistoryDialog, SettingsDialog, InputsDialog } from './components/Dialogs';
+import { TimelinesDialog } from './components/Timelines';
 
 // The components render the editor's static structure once; the engine
 // (editor/engine.js) then drives it imperatively — canvases, scrubbing,
@@ -33,6 +34,7 @@ export default function Editor() {
       <HistoryDialog />
       <SettingsDialog />
       <InputsDialog />
+      <TimelinesDialog />
       <div className="toast text-ui-small" id="toast"></div>
     </div>
   );
