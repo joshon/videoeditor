@@ -194,3 +194,18 @@ code { font-family: var(--font-mono); }
 ::-webkit-scrollbar { width: var(--spacing-xs); height: var(--spacing-xs); }
 ::-webkit-scrollbar-track { background: none; }
 ::-webkit-scrollbar-thumb { background: var(--cb-surface-card-text); border-radius: var(--radius-full); }
+
+/* ------------------------------------------------------------ clip inspector
+   Shares the left column with the media bin (components/Inspector.jsx). */
+.pane-tabs { display: flex; gap: var(--spacing-3xs); }
+.inspector-body { display: flex; flex-direction: column; gap: var(--spacing-lg); overflow-y: auto; min-height: 0; padding: var(--spacing-3xs); }
+.inspector-empty { margin: var(--spacing-xl) 0; text-align: center; }
+.inspector-section { display: flex; flex-direction: column; gap: var(--spacing-xs); align-items: stretch; }
+.inspector-section > .btn { align-self: flex-start; }
+.inspector-section .row { display: flex; gap: var(--spacing-xs); flex-wrap: wrap; align-items: flex-end; }
+.inspector-section .row > * { flex: 1 1 var(--width-xs); min-width: 0; }
+.inspector-section .row > .btn { flex: 0 0 auto; }
+.slider { display: grid; grid-template-columns: var(--width-xs) 1fr auto; align-items: center; gap: var(--spacing-xs); color: var(--cb-surface-001-text); }
+.slider input { width: 100%; accent-color: var(--cb-brand-bg); }
+.slider .value { min-width: calc(var(--spacing-3xl) * 2); text-align: right; color: var(--cb-secondary_text-text); }
+.swatch input[type="color"] { padding: 0; height: var(--height-sm); cursor: pointer; }

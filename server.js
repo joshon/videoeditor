@@ -184,10 +184,19 @@ function saveProject(dir, incoming, opts) { return withProjectLock(dir, () => sa
 async function saveProjectUnlocked(dir, incoming, { forceSnapshot } = {}) {
   const file = path.join(dir, 'project.json');
   const current = await readJson(file, null);
+  // A save must be a whole project. Anything else (a partial body, a missing
+  // revision) is refused rather than written over the project.
+  if (!incoming || !Number.isFinite(Number(incoming.rev)) || !Array.isArray(incoming.tracks) || !Array.isArray(incoming.clips)) {
+    const e = new Error('Not a complete project; nothing was saved.'); e.code = 400; throw e;
+  }
   if (current && Number(incoming.rev) <= Number(current.rev)) {
     const e = new Error('Stale save: the project was saved from somewhere else (another tab?). Reload to get the latest.');
     e.code = 409; throw e;
   }
+  // The project's identity is the server's to keep: never let a save drop it.
+  incoming.format = 'cutroom-project'; incoming.version = incoming.version || current?.version || 1;
+  incoming.name = incoming.name || current?.name || path.basename(dir);
+  incoming.createdAt = incoming.createdAt || current?.createdAt || new Date().toISOString();
   incoming.updatedAt = new Date().toISOString();
   await writeJsonAtomic(file, incoming);
   if (forceSnapshot || Date.now() - (lastSnapshot.get(dir) || 0) > SNAPSHOT_INTERVAL_MS) {
@@ -459,6 +468,9 @@ const PRESETS = {
 };
 
 const jobs = new Map();
+// Clip placement maths shared with the editor (an ES module, so it is imported).
+let geometryP = null;
+const loadGeometry = () => (geometryP = geometryP || import(require('url').pathToFileURL(path.join(ROOT, 'app', 'editor', 'geometry.mjs')).href));
 const presence = new Map(); // project dir -> Map(session -> { label, seen, since })
 const PRESENCE_TTL_MS = 25 * 1000;
 const even = (n) => Math.max(2, Math.round(n / 2) * 2);
@@ -468,7 +480,9 @@ async function buildExport(dir, project, opts) {
   const media = Object.fromEntries((await listMedia(dir)).map((m) => [m.id, m]));
   const tracks = project.tracks || [];
   const trackById = Object.fromEntries(tracks.map((t) => [t.id, t]));
-  const clips = (project.clips || []).filter((c) => media[c.mediaId] && media[c.mediaId].status === 'ready' && c.out > c.in);
+  const geo = await loadGeometry();
+  const isText = (c) => c.kind === 'text';
+  const clips = (project.clips || []).filter((c) => (isText(c) || (media[c.mediaId] && media[c.mediaId].status === 'ready')) && c.out > c.in);
   const total = clips.reduce((m, c) => Math.max(m, c.start + (c.out - c.in)), 0);
   if (total <= 0) throw new Error('The timeline is empty.');
 
@@ -485,7 +499,7 @@ async function buildExport(dir, project, opts) {
   const vTracks = tracks.filter((t) => t.kind === 'video' && !t.hidden).reverse();
   const vClips = [];
   for (const t of vTracks) vClips.push(...clips.filter((c) => c.trackId === t.id).sort((a, b) => a.start - b.start));
-  const aClips = clips.filter((c) => trackById[c.trackId] && trackById[c.trackId].kind === 'audio' && !trackById[c.trackId].muted && media[c.mediaId].hasAudio && (c.volume ?? 1) > 0);
+  const aClips = clips.filter((c) => trackById[c.trackId] && trackById[c.trackId].kind === 'audio' && !trackById[c.trackId].muted && !isText(c) && media[c.mediaId].hasAudio && (c.volume ?? 1) > 0);
 
   const args = ['-hide_banner', '-y']; const graph = []; let idx = 0;
   const addInput = (c) => { args.push('-ss', c.in.toFixed(4), '-t', (c.out - c.in).toFixed(4), '-i', path.join(dir, 'media', media[c.mediaId].file)); return idx++; };
@@ -497,9 +511,45 @@ async function buildExport(dir, project, opts) {
     graph.push(`[${base}:v]format=yuv420p,setsar=1[vb]`);
     let prev = 'vb';
     vClips.forEach((c, k) => {
-      const i = addInput(c); const end = c.start + (c.out - c.in);
-      graph.push(`[${i}:v]${media[c.mediaId].mirror ? 'hflip,' : ''}fps=${fps},scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p,setpts=PTS-STARTPTS+${t(c.start)}/TB[v${k}]`);
-      graph.push(`[${prev}][v${k}]overlay=eof_action=pass:enable='between(t,${t(c.start)},${t(end)})'[o${k}]`);
+      const D = c.out - c.in; const end = c.start + D; const at = `setpts=PTS-STARTPTS+${t(c.start)}/TB`;
+      let x = 0, y = 0;
+      if (isText(c)) {
+        // Text cards are drawn by the editor (exactly as previewed) and saved as PNGs.
+        const card = path.join(dir, 'cache', 'cards', `${path.basename(c.id)}.png`);
+        if (!fs.existsSync(card)) throw new Error('A text card has not been drawn yet. Open this timeline in the editor and export from there.');
+        const i = idx++; args.push('-loop', '1', '-framerate', String(fps), '-t', t(D), '-i', card);
+        graph.push(`[${i}:v]scale=${W}:${H},format=yuva420p,setsar=1,${at}[v${k}]`);
+      } else {
+        const m = media[c.mediaId]; const i = addInput(c);
+        const pre = `[${i}:v]${m.mirror ? 'hflip,' : ''}fps=${fps},setpts=PTS-STARTPTS`;
+        const f = geo.clipFrame(c), z = geo.clipZoom(c);
+        if (geo.isFullFrame(f) && !geo.hasZoom(z)) {
+          graph.push(`${pre},scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p,${at}[v${k}]`);
+        } else {
+          // Reframed and/or zooming. Scale the picture (every frame, as the zoom
+          // changes) so the part on show fills a BW×BH box, slide it so the focus
+          // point stays put, and cut it to shape. Same maths as geometry.mjs.
+          const g = geo.clipGeometry(c, m.width, m.height, W, H, 0);
+          const BW = even(g.box.w), BH = even(g.box.h);
+          const { sw, sh } = geo.boxShape(f, m.width, m.height);
+          const U = `min(max(t/${t(D)},0),1)`;
+          const Z = `max(1,${z.from}+(${z.to - z.from})*${U}*${U}*(3-2*${U}))`;
+          const cv = idx++; args.push('-f', 'lavfi', '-i', `color=c=black@0:s=${BW}x${BH}:r=${fps}:d=${t(D)}`);
+          graph.push(`${pre},scale=w='2*trunc(${BW / sw}*${Z}/2)':h='2*trunc(${BH / sh}*${Z}/2)':eval=frame,setsar=1[z${k}]`);
+          graph.push(`[${cv}:v]format=yuva420p[c${k}];[c${k}][z${k}]overlay=x='-${z.x}*(overlay_w-${BW})':y='-${z.y}*(overlay_h-${BH})':eval=frame:shortest=1:format=auto[b${k}]`);
+          let box = `b${k}`;
+          if (f.shape !== 'rect') {
+            const r = f.shape === 'circle' ? BW / 2 : Math.min(BW, BH) * geo.ROUNDED;
+            const dx = `max(abs(X-${(BW - 1) / 2})-${BW / 2 - r},0)`, dy = `max(abs(Y-${(BH - 1) / 2})-${BH / 2 - r},0)`;
+            const mk = idx++; args.push('-f', 'lavfi', '-i', `color=c=white:s=${BW}x${BH}:r=${fps}:d=${t(D)}`);
+            graph.push(`[${mk}:v]format=gray,geq=lum='255*clip(${r}-hypot(${dx},${dy})+0.5,0,1)'[m${k}];[b${k}][m${k}]alphamerge[s${k}]`);
+            box = `s${k}`;
+          }
+          if (g.full) graph.push(`[${box}]pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,${at}[v${k}]`);
+          else { graph.push(`[${box}]format=yuva420p,${at}[v${k}]`); x = Math.round(g.box.x); y = Math.round(g.box.y); }
+        }
+      }
+      graph.push(`[${prev}][v${k}]overlay=x=${x}:y=${y}:eof_action=pass:enable='between(t,${t(c.start)},${t(end)})'[o${k}]`);
       prev = `o${k}`;
     });
     vOut = prev;
@@ -556,6 +606,7 @@ const publicJob = (j) => { const { child, ...rest } = j; return rest; };
 
 // ---------------------------------------------------------------- static + range
 
+const RANGE_CHUNK = 2 * 1024 * 1024;
 async function serveFile(req, res, file, { noCache } = {}) {
   let st;
   try { st = await fsp.stat(file); } catch { return fail(res, 404, 'Not found'); }
@@ -567,7 +618,12 @@ async function serveFile(req, res, file, { noCache } = {}) {
     let start = range[1] ? Number(range[1]) : st.size - Number(range[2]);
     let end = range[1] && range[2] ? Number(range[2]) : st.size - 1;
     if (start >= st.size || start > end) { res.writeHead(416, { 'Content-Range': `bytes */${st.size}` }); return res.end(); }
-    end = Math.min(end, st.size - 1);
+    // Answer at most RANGE_CHUNK per request. A <video> asks for "everything from
+    // here" and then reads it only as fast as it plays, which holds the connection
+    // open; the browser allows just 6 per site, so a few paused players would
+    // starve saves and frame loads. A short answer frees the connection, and the
+    // player simply asks for the next piece.
+    end = Math.min(end, st.size - 1, start + RANGE_CHUNK - 1);
     res.writeHead(206, { ...headers, 'Content-Range': `bytes ${start}-${end}/${st.size}`, 'Content-Length': end - start + 1 });
     return fs.createReadStream(file, { start, end }).pipe(res);
   }
@@ -614,7 +670,7 @@ const server = http.createServer(async (req, res) => {
           if (m === 'PUT') {
             const body = JSON.parse(await readBody(req));
             try { return sendJson(res, 200, { ok: true, rev: (await saveProject(dir, body, { forceSnapshot: url.searchParams.get('snapshot') === '1' })).rev, savedAt: new Date().toISOString() }); }
-            catch (e) { return fail(res, e.code === 409 ? 409 : 500, e.message); }
+            catch (e) { return fail(res, e.code === 409 || e.code === 400 ? e.code : 500, e.message); }
           }
         }
         if (sub === 'media' && m === 'GET') return sendJson(res, 200, await listMedia(dir));
@@ -635,6 +691,15 @@ const server = http.createServer(async (req, res) => {
             if (parts[5] === 'chunk') return sendJson(res, 200, await appendRecordingChunk(req, dir, parts[4]));
             if (parts[5] === 'finish') { const { name } = JSON.parse(await readBody(req) || '{}'); return sendJson(res, 200, await finishRecording(dir, parts[4], name)); }
           } catch (e) { return fail(res, e.code === 404 ? 404 : 500, e.message); }
+        }
+        // Text cards, drawn by the editor as PNGs (cache: redrawn whenever a card changes).
+        if (sub === 'cards' && parts[4] && m === 'PUT') {
+          const { png } = JSON.parse(await readBody(req) || '{}');
+          const data = /^data:image\/png;base64,/.test(png || '') && Buffer.from(png.split(',')[1], 'base64');
+          if (!data) return fail(res, 400, 'png required');
+          await fsp.mkdir(path.join(dir, 'cache', 'cards'), { recursive: true });
+          await writeFileAtomic(path.join(dir, 'cache', 'cards', `${path.basename(parts[4])}.png`), data);
+          return sendJson(res, 200, { ok: true });
         }
         if (sub === 'media' && parts[4] && parts[5] === 'retry' && m === 'POST') { enqueue(dir, parts[4]); return sendJson(res, 200, { ok: true }); }
         // Cut lists: JSON edit decisions in projects/<p>/cutlists/, written by a person or an

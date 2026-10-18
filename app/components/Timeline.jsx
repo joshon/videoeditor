@@ -24,6 +24,7 @@ export default function Timeline() {
         <span className="sep"></span>
         <Button variant="subtle" id="addVBtn">+ Video track</Button>
         <Button variant="subtle" id="addABtn">+ Audio track</Button>
+        <Button variant="subtle" id="addTextBtn" title="Add a text card at the playhead">+ Text</Button>
         <div className="spacer"></div>
         <span className="text-ui-small hint" id="tlHint">Drag media here · drag edges to trim · ⌥-drag to unlink · scroll to zoom</span>
         <Button variant="subtle" id="fitBtn" title="Zoom to fit (\)">Fit</Button>

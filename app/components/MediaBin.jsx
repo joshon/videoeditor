@@ -1,4 +1,5 @@
 import { Button, Text } from '@ds/components';
+import { PaneTabs } from './Inspector';
 
 const ACCEPT = 'video/*,audio/*,.mov,.mp4,.m4v,.mkv,.avi,.mts,.mxf,.wav,.mp3,.m4a,.aac,.aif,.aiff,.flac';
 
@@ -7,7 +8,7 @@ export default function MediaBin() {
   return (
     <section className="pane bin" id="binPanel">
       <div className="pane-head">
-        <Text variant="eyebrow-small" as="span">Media</Text>
+        <PaneTabs current="media" />
         <div className="spacer"></div>
         <Button variant="outline" id="importBtn">Import</Button>
         <input type="file" id="fileInput" multiple accept={ACCEPT} hidden />

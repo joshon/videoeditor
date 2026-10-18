@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import TopBar from './components/TopBar';
 import PresenceBanner from './components/PresenceBanner';
 import MediaBin from './components/MediaBin';
+import Inspector from './components/Inspector';
 import SourceViewer from './components/SourceViewer';
 import ProgramViewer from './components/ProgramViewer';
 import Timeline from './components/Timeline';
@@ -26,6 +27,7 @@ export default function Editor() {
       <PresenceBanner />
       <main className="workspace">
         <MediaBin />
+        <Inspector />
         <SourceViewer />
         <ProgramViewer />
       </main>

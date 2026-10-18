@@ -4,6 +4,7 @@
 // exact seeks on a short-GOP proxy, with audio "grains" while you drag.
 
 import { getInputStream } from './inputs';
+import { clipFrame, clipZoom, clipText, clipGeometry, drawText, textBounds, hasZoom, ROUNDED, TEXT_DEFAULT } from './geometry.mjs';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -218,21 +219,23 @@ function drawContain(ctx, src, sw, sh, x, y, w, h) {
 // or the instant frame cache. The video keeps the screen unless the cache is
 // more than one cache step closer, so slow scrubbing doesn't flip between the
 // two or step backwards while a seek catches up.
-function drawAssetFrame(ctx, a, mt, x, y, w, h, role, playing) {
-  if (!a || !a.hasFrames) return false;
+function frameSource(a, mt, role, playing) {
+  if (!a || !a.hasFrames) return null;
   const v = a.videos[role];
   if (playing) {
-    if (v && v.readyState >= 2 && !v.paused && Math.abs(v.currentTime - mt) < 0.2) {
-      drawContain(ctx, v, v.videoWidth, v.videoHeight, x, y, w, h); return true;
-    }
+    if (v && v.readyState >= 2 && !v.paused && Math.abs(v.currentTime - mt) < 0.2) return { src: v, w: v.videoWidth, h: v.videoHeight };
   }
   const img = a.frameAt(mt);
   const imgDist = img ? Math.abs(img._t - mt) : Infinity;
   const vidDist = !playing && v && v.readyState >= 2 && v._shownTime != null ? Math.abs(v._shownTime - mt) : Infinity;
-  if (vidDist < Infinity && vidDist <= Math.max(imgDist, 1 / a.meta.scrubFps)) drawContain(ctx, v, v.videoWidth, v.videoHeight, x, y, w, h);
-  else if (img) drawContain(ctx, img, img.naturalWidth, img.naturalHeight, x, y, w, h);
   if (!playing) seekVideo(a.video(role), mt);
-  return !!img || vidDist < Infinity;
+  if (vidDist < Infinity && vidDist <= Math.max(imgDist, 1 / a.meta.scrubFps)) return { src: v, w: v.videoWidth, h: v.videoHeight };
+  if (img) return { src: img, w: img.naturalWidth, h: img.naturalHeight };
+  return null;
+}
+function drawAssetFrame(ctx, a, mt, x, y, w, h, role, playing) {
+  const f = frameSource(a, mt, role, playing); if (!f) return false;
+  drawContain(ctx, f.src, f.w, f.h, x, y, w, h); return true;
 }
 
 function drawWave(ctx, peaks, t0, t1, x, y, w, h, color) {
@@ -257,13 +260,64 @@ function fitCanvas(cv) {
   return { w: r.width, h: r.height, d };
 }
 
-function topClipAt(t) {
+// ------------------------------------------------------------------ layers
+// Every visible video track is a layer; the top track is the top layer. A clip
+// that fills the frame (or a text card with a full background) hides the
+// layers under it, so they're skipped. Placement maths is in geometry.mjs,
+// shared with the export.
+const isText = (c) => c.kind === 'text';
+const progress = (c, t) => clamp((t - c.start) / Math.max(len(c), EPS), 0, 1);
+function layersAt(t) {
+  const out = [];
   for (const tr of P().tracks) {
     if (tr.kind !== 'video' || tr.hidden) continue;
     const c = P().clips.find((c) => c.trackId === tr.id && c.start <= t + EPS && end(c) > t + EPS);
-    if (c && S.media[c.mediaId] && S.media[c.mediaId].hasVideo) return c;
+    if (!c) continue;
+    if (isText(c)) { out.push(c); if (clipText(c).bgMode === 'full') break; continue; }
+    const m = S.media[c.mediaId]; if (!m || !m.hasVideo) continue;
+    out.push(c); if (layerBox(c, t).full) break;
   }
-  return null;
+  return out.reverse(); // bottom first
+}
+const videoRole = (c) => 'pv' + c.trackId; // each track plays through its own <video>
+let measureCtx = null;
+// Where a layer sits, in sequence pixels (for drawing outlines and for picking it in the viewer).
+function layerBox(c, t = S.playhead) {
+  const { width: W, height: H } = P().settings;
+  if (isText(c)) {
+    measureCtx = measureCtx || document.createElement('canvas').getContext('2d');
+    return { ...textBounds(measureCtx, c, W, H), full: clipText(c).bgMode === 'full' };
+  }
+  const m = S.media[c.mediaId]; if (!m || !m.width) return { x: 0, y: 0, w: W, h: H, full: true };
+  const g = clipGeometry(c, m.width, m.height, W, H, progress(c, t));
+  return { ...g.box, full: g.full, g };
+}
+function shapePath(ctx, shape, x, y, w, h) {
+  ctx.beginPath();
+  if (shape === 'circle') ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+  else if (shape === 'rounded') ctx.roundRect(x, y, w, h, Math.min(w, h) * ROUNDED);
+  else ctx.rect(x, y, w, h);
+}
+const fontsAsked = new Set();
+function ensureFont(t) {
+  const spec = `${t.weight} 32px "${t.font}"`;
+  if (fontsAsked.has(spec) || document.fonts.check(spec)) return;
+  fontsAsked.add(spec); document.fonts.load(spec).then(() => requestRender('program')).catch(() => {});
+}
+// Draw one layer into the viewer, where the sequence frame is at (rx, ry) scaled by k.
+function drawLayer(ctx, c, t, rx, ry, k, playing) {
+  const { width: W, height: H } = P().settings;
+  if (isText(c)) {
+    ensureFont(clipText(c));
+    ctx.save(); ctx.translate(rx, ry); ctx.scale(k, k); drawText(ctx, c, W, H); ctx.restore();
+    return;
+  }
+  const a = S.assets[c.mediaId]; const b = layerBox(c, t); const g = b.g;
+  const f = frameSource(a, c.in + t - c.start, videoRole(c), playing); if (!f || !g) return;
+  ctx.save();
+  shapePath(ctx, g.shape, rx + b.x * k, ry + b.y * k, b.w * k, b.h * k); ctx.clip();
+  ctx.drawImage(f.src, g.src.x * f.w, g.src.y * f.h, g.src.w * f.w, g.src.h * f.h, rx + b.x * k, ry + b.y * k, b.w * k, b.h * k);
+  ctx.restore();
 }
 
 function renderProgram() {
@@ -272,14 +326,25 @@ function renderProgram() {
   ctx.fillStyle = C.lane; ctx.fillRect(0, 0, w, h);
   const { width: sw, height: sh } = P().settings;
   const s = Math.min(w / sw, h / sh); const rw = sw * s, rh = sh * s, rx = (w - rw) / 2, ry = (h - rh) / 2;
+  S.view = { rx, ry, k: s };
   ctx.fillStyle = C.black; ctx.fillRect(rx, ry, rw, rh);
-  const t = S.playhead; const clip = topClipAt(t);
+  const t = S.playhead;
   const playing = S.play && S.play.target === 'program' && S.play.rate > 0;
-  if (clip) {
-    const a = S.assets[clip.mediaId];
-    ctx.save(); ctx.beginPath(); ctx.rect(rx, ry, rw, rh); ctx.clip();
-    drawAssetFrame(ctx, a, clip.in + t - clip.start, rx, ry, rw, rh, 'program', playing);
-    ctx.restore();
+  const layers = layersAt(t);
+  ctx.save(); ctx.beginPath(); ctx.rect(rx, ry, rw, rh); ctx.clip();
+  for (const c of layers) drawLayer(ctx, c, t, rx, ry, s, playing);
+  ctx.restore();
+  // The clip being inspected: its outline (when it doesn't fill the frame) and its zoom focus.
+  const sel = !playing && inspectedClip();
+  if (sel && layers.includes(sel)) {
+    const b = layerBox(sel, t);
+    ctx.strokeStyle = C.select; ctx.lineWidth = C.line;
+    if (!b.full) { shapePath(ctx, isText(sel) ? 'rect' : clipFrame(sel).shape, rx + b.x * s, ry + b.y * s, b.w * s, b.h * s); ctx.stroke(); }
+    if (!isText(sel) && hasZoom(clipZoom(sel))) {
+      const z = clipZoom(sel); const g = b.g;
+      const fx = rx + (b.x + ((z.x - g.src.x) / g.src.w) * b.w) * s, fy = ry + (b.y + ((z.y - g.src.y) / g.src.h) * b.h) * s;
+      ctx.beginPath(); ctx.arc(fx, fy, 6, 0, Math.PI * 2); ctx.moveTo(fx - 10, fy); ctx.lineTo(fx + 10, fy); ctx.moveTo(fx, fy - 10); ctx.lineTo(fx, fy + 10); ctx.stroke();
+    }
   }
   // While recording the camera, show it picture-in-picture in the bottom right.
   const live = S.rec && S.rec.preview;
@@ -469,9 +534,15 @@ function drawClip(ctx, c, r, cw, off) {
   const isVideo = r.track.kind === 'video';
   ctx.save();
   ctx.beginPath(); ctx.roundRect(x0, y, Math.max(1, wpx), h, C.radius); ctx.clip();
-  ctx.fillStyle = !m || m.status !== 'ready' ? C.missing : isVideo ? C.video : C.audio;
+  ctx.fillStyle = isText(c) ? C.video : !m || m.status !== 'ready' ? C.missing : isVideo ? C.video : C.audio;
   ctx.fillRect(vx0, y, vx1 - vx0, h);
-  if (a && a.ready) {
+  if (isText(c)) {
+    // A text card: a swatch of its colours under the label.
+    const t = clipText(c);
+    ctx.fillStyle = t.bgMode === 'none' ? C.lane : t.bg; ctx.fillRect(vx0, y + LABEL_H, vx1 - vx0, h - LABEL_H);
+    ctx.fillStyle = t.color; ctx.font = `${t.weight} ${Math.min(h - LABEL_H - 6, 18)}px "${t.font}"`; ctx.textBaseline = 'middle';
+    ctx.fillText(t.content.split('\n')[0], Math.max(x0, 0) + 6, y + LABEL_H + (h - LABEL_H) / 2);
+  } else if (a && a.ready) {
     if (isVideo && a.hasFrames) {
       const th = h - LABEL_H; const tw = Math.max(16, (th * (m.width || 16)) / (m.height || 9));
       // Tiles sit on a grid in source time, not from the clip's left edge, so a
@@ -493,7 +564,8 @@ function drawClip(ctx, c, r, cw, off) {
   ctx.fillStyle = isVideo ? C.video : C.audio; ctx.fillRect(vx0, y, vx1 - vx0, LABEL_H);
   ctx.fillStyle = isVideo ? C.videoText : C.audioText; ctx.font = `${C.uiSize}px ${C.sans}`; ctx.textBaseline = 'middle';
   const vol = c.volume != null && c.volume !== 1 ? `  ${(20 * Math.log10(Math.max(c.volume, 0.0001))).toFixed(1)} dB` : '';
-  ctx.fillText(((m && m.name) || 'Missing media') + vol, Math.max(x0, 0) + 6, y + LABEL_H / 2);
+  const fx = (!isText(c) && (c.frame || c.zoom)) ? '  · reframed' : '';
+  ctx.fillText((isText(c) ? 'Text' : ((m && m.name) || 'Missing media')) + vol + fx, Math.max(x0, 0) + 6, y + LABEL_H / 2);
   if (off) { ctx.globalAlpha = 0.6; ctx.fillStyle = C.lane; ctx.fillRect(vx0, y, vx1 - vx0, h); ctx.globalAlpha = 1; }
   ctx.restore();
   if (S.selection.has(c.id)) {
@@ -602,10 +674,11 @@ function clampTrim(set, edge, delta) {
   for (const o of set) {
     const others = P().clips.filter((c) => c.trackId === o.trackId && !ids.has(c.id));
     if (edge === 'in') {
-      lo = Math.max(lo, -o.in, -o.start); hi = Math.min(hi, o.out - o.in - md);
+      lo = Math.max(lo, -o.start, isText(o) ? -Infinity : -o.in); hi = Math.min(hi, o.out - o.in - md);
       for (const c of others) if (end(c) <= o.start + EPS) lo = Math.max(lo, end(c) - o.start);
     } else {
-      hi = Math.min(hi, mediaDur(o.mediaId) - o.out); lo = Math.max(lo, o.in + md - o.out);
+      if (!isText(o)) hi = Math.min(hi, mediaDur(o.mediaId) - o.out);
+      lo = Math.max(lo, o.in + md - o.out);
       for (const c of others) if (c.start >= end(o) - EPS) hi = Math.min(hi, c.start - end(o));
     }
   }
@@ -654,6 +727,80 @@ function deleteSelected(ripple) {
     }
     S.selection.clear();
   });
+}
+
+// ------------------------------------------------------------------ clip inspector
+// The Clip inspector (components/Inspector.jsx) is React. It hears about the
+// selected video-track clip through 'cutroom:clip' and asks for changes with
+// 'cutroom:clip-edit' { id, patch: { frame?, zoom?, text? }, label }. A patch
+// value of null removes that setting.
+function inspectedClip() {
+  if (!P()) return null;
+  const vids = P().clips.filter((c) => S.selection.has(c.id) && trackById(c.trackId)?.kind === 'video');
+  return vids.find((c) => c.id === S.lastClicked) || vids[0] || null;
+}
+let lastEmitted = '';
+function emitClip() {
+  const c = inspectedClip(); const m = c && !isText(c) ? S.media[c.mediaId] : null;
+  const detail = {
+    slug: S.slug, seq: P() ? { width: P().settings.width, height: P().settings.height } : null,
+    clip: c ? clone(c) : null, track: c ? trackById(c.trackId).name : null,
+    media: m ? { name: m.name, width: m.width, height: m.height } : null,
+  };
+  const sig = JSON.stringify(detail); if (sig === lastEmitted) return;
+  lastEmitted = sig; window.__cutroomClip = detail;
+  window.dispatchEvent(new CustomEvent('cutroom:clip', { detail }));
+}
+// Consecutive edits of the same setting on the same clip (a slider being
+// dragged, a word being typed) make a single undo step.
+function editClip({ id, patch, label = 'Edit clip' }) {
+  const c = clipById(id); if (!c) return;
+  const key = id + '|' + label; const now = performance.now();
+  const merge = S.lastEdit && S.lastEdit.key === key && now - S.lastEdit.at < 1500 && S.undo[S.undo.length - 1] === S.lastEdit.entry;
+  const before = merge ? null : editState();
+  for (const k of ['frame', 'zoom', 'text']) {
+    if (patch[k] === null) delete c[k];
+    else if (patch[k]) c[k] = { ...(c[k] || {}), ...patch[k] };
+  }
+  if (before) {
+    if (before === editState()) return;
+    S.undo.push({ label, state: before }); if (S.undo.length > 500) S.undo.shift();
+  }
+  S.lastEdit = { key, at: now, entry: S.undo[S.undo.length - 1] };
+  S.redo = []; updateUndoButtons(); markDirty(); requestRender();
+  emitClip(); // now, so the inspector's controls never show a stale value mid-drag
+  if (isText(c)) queueCard(c.id);
+}
+
+// A text card goes at the playhead on the highest video track with room for
+// it (a new top track if none has), so it sits over the picture.
+function addTextCard() {
+  const dur = 4; const s = qt(S.playhead), e = s + dur; let id;
+  mutate('Add text card', () => {
+    const vts = P().tracks.filter((t) => t.kind === 'video');
+    let tr = vts.find((t) => !P().clips.some((c) => c.trackId === t.id && c.start < e - EPS && end(c) > s + EPS));
+    if (!tr) { tr = { id: 'V' + uid(), kind: 'video', name: 'V' + (vts.length + 1), hidden: false }; P().tracks.unshift(tr); }
+    const c = { id: uid(), kind: 'text', trackId: tr.id, start: s, in: 0, out: dur, text: { ...TEXT_DEFAULT } };
+    P().clips.push(c); id = c.id;
+    S.selection = new Set([c.id]); S.lastClicked = c.id;
+  });
+  queueCard(id);
+  window.dispatchEvent(new Event('cutroom:show-inspector'));
+}
+
+// The export uses each card as a PNG drawn here, so it matches the preview
+// exactly (same fonts, same layout). Saved to cache/cards/<clip id>.png.
+const cardTimers = new Map();
+function queueCard(id) {
+  clearTimeout(cardTimers.get(id));
+  cardTimers.set(id, setTimeout(() => { cardTimers.delete(id); const c = clipById(id); if (c) uploadCard(c).catch((e) => console.warn('card', e)); }, 1000));
+}
+async function uploadCard(c) {
+  const { width: W, height: H } = P().settings; const t = clipText(c);
+  await document.fonts.load(`${t.weight} 32px "${t.font}"`).catch(() => {});
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  drawText(cv.getContext('2d'), c, W, H);
+  await api('PUT', `/api/projects/${enc(S.slug)}/cards/${enc(c.id)}`, { png: cv.toDataURL('image/png') });
 }
 
 // ------------------------------------------------------------------ timelines
@@ -1041,7 +1188,12 @@ function stop(internal = false) {
   if (S.rec && !internal && !S.rec.stopping) { stopRecording(); return; }
   const p = S.play; if (!p) return;
   for (const n of p.nodes) { try { n.stop(); } catch {} }
-  for (const a of Object.values(S.assets)) { const v = a.videos[p.target]; if (v && !v.paused) v.pause(); if (v) v._clip = null; }
+  for (const a of Object.values(S.assets)) {
+    for (const [role, v] of Object.entries(a.videos)) {
+      if (p.target === 'program' ? !role.startsWith('pv') : role !== p.target) continue;
+      if (!v.paused) v.pause(); v._clip = null;
+    }
+  }
   setPos(p.target, qt(getPos(p.target), p.target === 'program' ? seqFps() : (S.assets[S.source.mediaId] || {}).meta?.fps || seqFps()));
   S.play = null; updateTransport(); requestRender();
 }
@@ -1061,14 +1213,12 @@ function updateTransport() {
   $('rateLabel').textContent = p && p.rate !== 1 ? `${p.rate > 0 ? '▶' : '◀'} ${Math.abs(p.rate)}×` : '';
 }
 
+// Each visible layer plays its proxy on its track's own <video>.
 function syncProgramVideo(p, t) {
-  const clip = topClipAt(t);
-  const a = clip && S.assets[clip.mediaId];
-  const v = p.rate > 0 && p.rate <= 4 && a ? a.video('program') : null;
-  const next = topClipAt(t + 0.6); const na = next && next !== clip && S.assets[next.mediaId];
-  const nv = na ? na.video('program') : null;
-  for (const o of Object.values(S.assets)) { const ov = o.videos.program; if (ov && ov !== v && !ov.paused) ov.pause(); }
-  if (v) {
+  const live = new Set();
+  if (p.rate > 0 && p.rate <= 4) for (const clip of layersAt(t)) {
+    const a = !isText(clip) && S.assets[clip.mediaId]; const v = a && a.video(videoRole(clip)); if (!v) continue;
+    live.add(v);
     const want = clip.in + t - clip.start;
     if (v._clip !== clip.id) {
       if (Math.abs(v.currentTime - want) > 0.1) { v._queued = null; v.currentTime = want; }
@@ -1077,8 +1227,12 @@ function syncProgramVideo(p, t) {
     if (v.playbackRate !== p.rate) v.playbackRate = p.rate;
     if (v.paused) v.play().catch(() => {});
   }
-  // Pre-roll the next clip's proxy so the cut is clean.
-  if (nv && nv !== v && nv._clip !== next.id && nv.readyState >= 1) { nv._clip = next.id; nv.currentTime = next.in; }
+  for (const o of Object.values(S.assets)) for (const [role, v] of Object.entries(o.videos)) if (role.startsWith('pv') && !live.has(v) && !v.paused) v.pause();
+  // Pre-roll the next clips' proxies so the cuts are clean.
+  for (const next of layersAt(t + 0.6)) {
+    const na = !isText(next) && S.assets[next.mediaId]; const nv = na && na.video(videoRole(next));
+    if (nv && !live.has(nv) && nv._clip !== next.id && nv.readyState >= 1) { nv._clip = next.id; nv.currentTime = next.in; }
+  }
 }
 function syncSourceVideo(p, t) {
   const a = S.assets[S.source.mediaId]; if (!a) return;
@@ -1266,7 +1420,7 @@ function frame() {
       else if (p.rate < 0 && t <= 0) { S.playhead = 0; stop(); }
       else {
         S.playhead = t; syncProgramVideo(p, t);
-        if (p.rate < 0 || p.rate > 4) { const c = topClipAt(t); if (c && S.assets[c.mediaId]) S.assets[c.mediaId].preload(c.in + t - c.start, p.rate < 0 ? 2 : 0.2, p.rate < 0 ? 0.2 : 2); }
+        if (p.rate < 0 || p.rate > 4) for (const c of layersAt(t)) if (S.assets[c.mediaId]) S.assets[c.mediaId].preload(c.in + t - c.start, p.rate < 0 ? 2 : 0.2, p.rate < 0 ? 0.2 : 2);
         const w = $('tlCanvas').clientWidth; const x = xOf(t);
         if (x > w - 40 || x < 0) S.scroll = Math.max(0, t - (p.rate > 0 ? 40 : w - 40) / S.zoom);
       }
@@ -1284,7 +1438,7 @@ function frame() {
     if (P()) {
       if (dirty.program) { dirty.program = false; renderProgram(); }
       if (dirty.source) { dirty.source = false; renderSource(); }
-      if (dirty.timeline) { dirty.timeline = false; renderTimeline(); }
+      if (dirty.timeline) { dirty.timeline = false; renderTimeline(); emitClip(); }
       if (dirty.bin) { dirty.bin = false; renderBinThumbs(); }
     }
   } catch (e) { console.error(e); }
@@ -1532,7 +1686,7 @@ function ensurePlayheadVisible() {
   const w = $('tlCanvas').clientWidth; const x = xOf(S.playhead);
   if (x < 0 || x > w - 20) S.scroll = Math.max(0, S.playhead - (w * 0.4) / S.zoom);
 }
-function setSelection(clips) { S.selection = new Set(clips.map((c) => c.id)); requestRender('timeline'); }
+function setSelection(clips) { S.selection = new Set(clips.map((c) => c.id)); requestRender(); }
 function localXY(e, el) { const r = el.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
 
 function wireTimeline() {
@@ -1553,7 +1707,9 @@ function wireTimeline() {
       const group = [c, ...(S.linked ? partners(c) : [])];
       const on = !S.selection.has(c.id); for (const g of group) on ? S.selection.add(g.id) : S.selection.delete(g.id);
     } else if (!S.selection.has(c.id)) setSelection([c, ...(S.linked && !e.altKey ? partners(c) : [])]);
-    loadSource(c.mediaId, c.id);
+    S.lastClicked = c.id;
+    if (!isText(c)) loadSource(c.mediaId, c.id);
+    else window.dispatchEvent(new Event('cutroom:show-inspector'));
     const before = editState();
     if (hit.edge) {
       S.drag = { type: 'trim', edge: hit.edge, x0: x, before, set: trimGroup(c, e.altKey), grab: { ...c } };
@@ -1581,8 +1737,8 @@ function wireTimeline() {
       const delta = qt(raw + snapDelta([edgeT], ids));
       applyTrim(d.set, d.edge, clampTrim(d.set, d.edge, delta));
       const c = clipById(d.grab.id);
-      S.source.t = d.edge === 'in' ? c.in : Math.max(c.in, c.out - 1 / (S.media[c.mediaId].fps || 30));
-      scrubAudio('source'); requestRender(); edgeScroll(x, cv.clientWidth); return;
+      if (!isText(c)) { S.source.t = d.edge === 'in' ? c.in : Math.max(c.in, c.out - 1 / (S.media[c.mediaId].fps || 30)); scrubAudio('source'); }
+      requestRender(); edgeScroll(x, cv.clientWidth); return;
     }
     if (d.type === 'move') {
       if (!d.started && Math.hypot(x - d.x0, y - d.y0) < 4) return;
@@ -1718,14 +1874,53 @@ function wireSource() {
   });
   $('sourcePanel').addEventListener('pointerdown', () => focusPanel('source'));
   $('programPanel').addEventListener('pointerdown', () => focusPanel('program'));
-  // Drag on the program picture scrubs the sequence.
+  // On the program picture: drag a cutout or a text card to move it; ⌥-click a
+  // clip to set its zoom focus; drag anywhere else to scrub the sequence.
   const pc = $('programCanvas');
-  pc.addEventListener('pointerdown', (e) => { if (S.play) stop(); pc.setPointerCapture(e.pointerId); pc._x = e.clientX; pc._t = S.playhead; });
+  const toFrame = (e) => { const { x, y } = localXY(e, pc); const v = S.view; return v ? { x: (x - v.rx) / v.k, y: (y - v.ry) / v.k } : null; };
+  const layerAtPoint = (pt) => {
+    if (!pt || !P()) return null;
+    for (const c of layersAt(S.playhead).reverse()) {
+      const b = layerBox(c);
+      if (pt.x >= b.x && pt.x <= b.x + b.w && pt.y >= b.y && pt.y <= b.y + b.h) return { c, b };
+    }
+    return null;
+  };
+  pc.addEventListener('pointerdown', (e) => {
+    if (S.play) stop(); pc.setPointerCapture(e.pointerId);
+    const pt = toFrame(e); const hit = layerAtPoint(pt);
+    if (hit && e.altKey && !isText(hit.c)) {
+      const g = hit.b.g; const u = (pt.x - hit.b.x) / hit.b.w, v = (pt.y - hit.b.y) / hit.b.h;
+      setSelection([hit.c]); S.lastClicked = hit.c.id;
+      editClip({ id: hit.c.id, patch: { zoom: { x: clamp(g.src.x + u * g.src.w, 0, 1), y: clamp(g.src.y + v * g.src.h, 0, 1) } }, label: 'Zoom focus' });
+      return;
+    }
+    if (hit && !hit.b.full) {
+      const c = hit.c; setSelection([c]); S.lastClicked = c.id;
+      const o = isText(c) ? clipText(c) : clipFrame(c);
+      pc._move = { id: c.id, key: isText(c) ? 'text' : 'frame', p0: pt, x0: o.x, y0: o.y };
+      return;
+    }
+    pc._x = e.clientX; pc._t = S.playhead;
+  });
   pc.addEventListener('pointermove', (e) => {
-    if (pc._x == null) return;
+    const mv = pc._move;
+    if (mv) {
+      const pt = toFrame(e); const { width: W, height: H } = P().settings;
+      const x = clamp(mv.x0 + (pt.x - mv.p0.x) / W, 0, 1), y = clamp(mv.y0 + (pt.y - mv.p0.y) / H, 0, 1);
+      editClip({ id: mv.id, patch: { [mv.key]: { x, y } }, label: 'Move in frame' });
+      return;
+    }
+    if (pc._x == null) {
+      const hit = e.buttons ? null : layerAtPoint(toFrame(e));
+      pc.style.cursor = hit && e.altKey && !isText(hit.c) ? 'crosshair' : hit && !hit.b.full ? 'move' : '';
+      return;
+    }
     const range = Math.max(seqEnd(), 1); setPlayhead(clamp(pc._t + ((e.clientX - pc._x) / pc.clientWidth) * range, 0, range)); scrubAudio('program'); ensurePlayheadVisible();
   });
-  pc.addEventListener('pointerup', () => (pc._x = null));
+  const endDrag = () => { pc._x = null; pc._move = null; };
+  pc.addEventListener('pointerup', endDrag);
+  pc.addEventListener('pointercancel', endDrag);
 
   $('srcIn').onclick = () => setSourceMark('in');
   $('srcOut').onclick = () => setSourceMark('out');
@@ -1825,6 +2020,7 @@ async function openProject(slug) {
     source: { mediaId: null, clipId: null, t: 0 },
   });
   $('snapBtn').checked = S.snap; $('linkBtn').checked = S.linked; setPushMode(S.pushMode, { restoring: true });
+  p.name = p.name || slug; // a project folder's name stands in if the file lost its own
   $('projectName').textContent = p.name; document.title = `${p.name} — Cutroom`;
   history.replaceState(null, '', `?p=${enc(slug)}`);
   setSaveState('saved', `Opened from disk`);
@@ -1905,6 +2101,7 @@ function trackJob(id) {
 }
 async function startExport() {
   try { await flushSave(); } catch { return toast('Saving failed — fix that before exporting', true); }
+  try { for (const c of P().clips.filter(isText)) await uploadCard(c); } catch (e) { $('exStatus').textContent = 'Could not draw a text card: ' + e.message; return; }
   try {
     $('exStatus').textContent = 'Starting…';
     const j = await api('POST', `/api/projects/${enc(S.slug)}/export`, { preset: $('exPreset').value, resolution: $('exRes').value, fps: $('exFps').value || null, name: $('exName').value.trim() });
@@ -1965,6 +2162,9 @@ function wireChrome() {
   for (const [m, id] of Object.entries(PUSH_BUTTONS)) $(id).onclick = () => setPushMode(m);
   $('linkBtn').onchange = () => { S.linked = $('linkBtn').checked; S.uiDirty = true; };
   $('fitBtn').onclick = zoomFit;
+  $('addTextBtn').onclick = addTextCard;
+  window.addEventListener('cutroom:clip-edit', (e) => editClip(e.detail));
+  window.addEventListener('cutroom:add-text', addTextCard);
   $('zoomSlider').oninput = (e) => zoomAroundPlayhead(ZMIN * Math.pow(ZMAX / ZMIN, e.target.value / 1000));
   $('addVBtn').onclick = () => mutate('Add video track', () => {
     const n = P().tracks.filter((t) => t.kind === 'video').length + 1; P().tracks.unshift({ id: 'V' + uid(), kind: 'video', name: 'V' + n, hidden: false });
