@@ -520,8 +520,13 @@ async function buildExport(dir, project, opts) {
         const i = idx++; args.push('-loop', '1', '-framerate', String(fps), '-t', t(D), '-i', card);
         graph.push(`[${i}:v]scale=${W}:${H},format=yuva420p,setsar=1,${at}[v${k}]`);
       } else {
-        const m = media[c.mediaId]; const i = addInput(c);
-        const pre = `[${i}:v]${m.mirror ? 'hflip,' : ''}fps=${fps},setpts=PTS-STARTPTS`;
+        // A clip that runs past the end of its media holds the last frame (tpad clones it).
+        const m = media[c.mediaId]; const fr = 1 / fps;
+        const from = Math.min(c.in, Math.max(0, (m.duration || 0) - 2 * fr));
+        const real = Math.max(fr, Math.min(D, (m.duration || D) - from));
+        args.push('-ss', from.toFixed(4), '-t', t(real), '-i', path.join(dir, 'media', m.file)); const i = idx++;
+        const hold = D - real > 0.001 ? `,tpad=stop_mode=clone:stop_duration=${t(D - real)}` : '';
+        const pre = `[${i}:v]${m.mirror ? 'hflip,' : ''}fps=${fps}${hold},setpts=PTS-STARTPTS`; // tpad must come before setpts, which drops the frame rate tpad counts in
         const f = geo.clipFrame(c), z = geo.clipZoom(c);
         if (geo.isFullFrame(f) && !geo.hasZoom(z)) {
           graph.push(`${pre},scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p,${at}[v${k}]`);

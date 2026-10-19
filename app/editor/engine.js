@@ -313,7 +313,8 @@ function drawLayer(ctx, c, t, rx, ry, k, playing) {
     return;
   }
   const a = S.assets[c.mediaId]; const b = layerBox(c, t); const g = b.g;
-  const f = frameSource(a, c.in + t - c.start, videoRole(c), playing); if (!f || !g) return;
+  const mt = mediaTime(c, t); const held = mt < c.in + t - c.start - 1e-3;
+  const f = frameSource(a, mt, videoRole(c), playing && !held); if (!f || !g) return;
   ctx.save();
   shapePath(ctx, g.shape, rx + b.x * k, ry + b.y * k, b.w * k, b.h * k); ctx.clip();
   ctx.drawImage(f.src, g.src.x * f.w, g.src.y * f.h, g.src.w * f.w, g.src.h * f.h, rx + b.x * k, ry + b.y * k, b.w * k, b.h * k);
@@ -568,12 +569,18 @@ function drawClip(ctx, c, r, cw, off) {
       drawWave(ctx, a.peaks, c.in + (vx0 - x0) / S.zoom, c.in + (vx1 - x0) / S.zoom, vx0, y + LABEL_H, vx1 - vx0, h - LABEL_H, C.wave);
     }
   }
+  // The held last frame past the media's end: shaded.
+  if (!isText(c) && m && c.out > m.duration + 1e-3) {
+    const hx = Math.max(vx0, x0 + (m.duration - c.in) * S.zoom);
+    if (hx < vx1) { ctx.globalAlpha = 0.45; ctx.fillStyle = C.lane; ctx.fillRect(hx, y + LABEL_H, vx1 - hx, h - LABEL_H); ctx.globalAlpha = 1; }
+  }
   // label strip
   ctx.fillStyle = isVideo ? C.video : C.audio; ctx.fillRect(vx0, y, vx1 - vx0, LABEL_H);
   ctx.fillStyle = isVideo ? C.videoText : C.audioText; ctx.font = `${C.uiSize}px ${C.sans}`; ctx.textBaseline = 'middle';
   const vol = c.volume != null && c.volume !== 1 ? `  ${(20 * Math.log10(Math.max(c.volume, 0.0001))).toFixed(1)} dB` : '';
   const fx = (!isText(c) && (c.frame || c.zoom)) ? '  · reframed' : '';
-  ctx.fillText((isText(c) ? 'Text' : ((m && m.name) || 'Missing media')) + vol + fx, Math.max(x0, 0) + 6, y + LABEL_H / 2);
+  const hold = !isText(c) && m && c.out > m.duration + 1e-3 ? `  · holds last frame ${fmtDur(c.out - Math.max(c.in, m.duration))}` : '';
+  ctx.fillText((isText(c) ? 'Text' : ((m && m.name) || 'Missing media')) + vol + fx + hold, Math.max(x0, 0) + 6, y + LABEL_H / 2);
   if (off) { ctx.globalAlpha = 0.6; ctx.fillStyle = C.lane; ctx.fillRect(vx0, y, vx1 - vx0, h); ctx.globalAlpha = 1; }
   ctx.restore();
   if (S.selection.has(c.id)) {
@@ -733,6 +740,14 @@ function placeMedia(target) {
   S.uiDirty = true; requestRender();
 }
 
+// A video clip can run past the end of its media: the last frame holds (a
+// freeze), in the viewer and the export. Sound can't, so audio clips stop at
+// the end of theirs.
+const HOLD_PULL = 48; // px past the media's end before a trim breaks through into a hold
+const canHold = (c) => trackById(c.trackId)?.kind === 'video' && !!S.media[c.mediaId]?.hasVideo;
+const lastFrameTime = (c) => Math.max(0, mediaDur(c.mediaId) - 1 / (S.media[c.mediaId]?.fps || 30));
+const mediaTime = (c, t) => Math.min(c.in + t - c.start, lastFrameTime(c));
+
 // Trim helpers shared by edge drags, source-viewer In/Out and Q/W.
 function trimGroup(c, alt) { return [c, ...(S.linked && !alt ? partners(c) : [])].map((x) => ({ ...x })); }
 function clampTrim(set, edge, delta) {
@@ -743,7 +758,7 @@ function clampTrim(set, edge, delta) {
       lo = Math.max(lo, -o.start, isText(o) ? -Infinity : -o.in); hi = Math.min(hi, o.out - o.in - md);
       for (const c of others) if (end(c) <= o.start + EPS) lo = Math.max(lo, end(c) - o.start);
     } else {
-      if (!isText(o)) hi = Math.min(hi, mediaDur(o.mediaId) - o.out);
+      if (!isText(o) && !canHold(o)) hi = Math.min(hi, mediaDur(o.mediaId) - o.out);
       lo = Math.max(lo, o.in + md - o.out);
       for (const c of others) if (c.start >= end(o) - EPS) hi = Math.min(hi, c.start - end(o));
     }
@@ -1291,8 +1306,9 @@ function syncProgramVideo(p, t) {
   const live = new Set();
   if (p.rate > 0 && p.rate <= 4) for (const clip of layersAt(t)) {
     const a = !isText(clip) && S.assets[clip.mediaId]; const v = a && a.video(videoRole(clip)); if (!v) continue;
-    live.add(v);
     const want = clip.in + t - clip.start;
+    if (want >= lastFrameTime(clip)) continue; // holding the last frame: drawn from the frame cache
+    live.add(v);
     if (v._clip !== clip.id) {
       if (Math.abs(v.currentTime - want) > 0.1) { v._queued = null; v.currentTime = want; }
       v._clip = clip.id;
@@ -1785,7 +1801,8 @@ function wireTimeline() {
     else window.dispatchEvent(new Event('cutroom:show-inspector'));
     const before = editState();
     if (hit.edge) {
-      S.drag = { type: 'trim', edge: hit.edge, x0: x, before, set: trimGroup(c, e.altKey), grab: { ...c } };
+      const set = trimGroup(c, e.altKey);
+      S.drag = { type: 'trim', edge: hit.edge, x0: x, before, set, grab: { ...c }, wasHolding: set.some((o) => canHold(o) && o.out > mediaDur(o.mediaId) + 1e-3) };
     } else {
       let ids = new Set(e.altKey ? [c.id] : [...S.selection]);
       if (S.linked && !e.altKey) for (const id of [...ids]) for (const p of partners(clipById(id))) ids.add(p.id);
@@ -1807,7 +1824,20 @@ function wireTimeline() {
       const raw = tOf(x) - tOf(d.x0);
       const ids = new Set(d.set.map((o) => o.id));
       const edgeT = d.edge === 'in' ? d.grab.start + raw : end(d.grab) + raw;
-      const delta = qt(raw + snapDelta([edgeT], ids));
+      let delta = qt(raw + snapDelta([edgeT], ids));
+      // The end of the media is a hard stop. Pulling well past it (HOLD_PULL px)
+      // breaks through, and the clip holds its last frame from there on.
+      const held = d.edge === 'out' && d.set.every(canHold);
+      if (held) {
+        const stop = Math.min(...d.set.map((o) => mediaDur(o.mediaId) - o.out));
+        const past = (delta - stop) * S.zoom;
+        if (d.set.some((o) => o.out > mediaDur(o.mediaId) + 1e-3)) d.broke = true; // already holding
+        if (past > 0 && !d.broke) {
+          if (past < HOLD_PULL) delta = stop;
+          else { d.broke = true; toast('Past the end of the clip: its last frame holds for the extra time'); }
+        }
+        if (d.broke && !d.wasHolding && past > 0) delta = qt(stop + Math.max(0, past - HOLD_PULL) / S.zoom);
+      }
       applyTrim(d.set, d.edge, clampTrim(d.set, d.edge, delta));
       const c = clipById(d.grab.id);
       if (!isText(c)) { S.source.t = d.edge === 'in' ? c.in : Math.max(c.in, c.out - 1 / (S.media[c.mediaId].fps || 30)); scrubAudio('source'); }
