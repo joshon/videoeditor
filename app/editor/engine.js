@@ -410,6 +410,12 @@ let RULER_H = 32, VH = 64, AH = 48, GAP = 10, LABEL_H = 16;
 const xOf = (t) => (t - S.scroll) * S.zoom;
 const tOf = (x) => x / S.zoom + S.scroll;
 
+// Scroll the tracks up or down (when there are more than fit), keeping within the content.
+function scrollTracks(dy) {
+  const overflow = Math.max(0, layout().contentH - $('tlCanvas').clientHeight);
+  const v = clamp(S.vscroll + dy, 0, overflow);
+  if (v !== S.vscroll) { S.vscroll = v; renderTrackHeads(); requestRender('timeline'); }
+}
 function layout() {
   const rows = []; let y = RULER_H + 6 - S.vscroll; let prev = null;
   for (const t of P().tracks) {
@@ -576,17 +582,22 @@ function drawClip(ctx, c, r, cw, off) {
 }
 
 function renderTrackHeads() {
-  const el = $('trackHeads'); const { rows } = layout();
-  el.innerHTML = '';
+  const el = $('trackHeads');
+  S.vscroll = clamp(S.vscroll, 0, Math.max(0, layout().contentH - $('tlCanvas').clientHeight)); // tracks removed or panel resized
+  const { rows } = layout();
+  el.innerHTML = ''; el.style.clipPath = `inset(${RULER_H}px 0 0 0)`; // names scrolled up go under the ruler, like their rows
   for (const r of rows) {
     const d = document.createElement('div'); d.className = 'track-head';
     d.style.top = r.y + 'px'; d.style.height = r.h + 'px';
     const isV = r.track.kind === 'video';
     const pressed = isV ? r.track.hidden : r.track.muted;
     const recHere = S.rec && S.rec.trackId === r.track.id;
+    const lastOfKind = P().tracks.filter((t) => t.kind === r.track.kind).length <= 1;
     d.innerHTML = `<span class="tname text-labels-medium">${escapeHtml(r.track.name)}</span>
+      ${lastOfKind ? '' : dsIconButton('subtle', 'delete', 'del', `Delete track ${r.track.name} and the clips on it`)}
       ${dsToggle(isV ? 'Hide' : 'Mute', !!pressed, isV ? 'Hide this track' : 'Mute this track')}
       ${dsIconButton(recHere ? 'primary' : 'subtle', recHere ? 'stop' : isV ? 'videocam' : 'mic', 'rec', recHere ? 'Stop recording' : isV ? 'Record the camera onto this track from the playhead' : 'Record the microphone onto this track from the playhead')}`;
+    const del = d.querySelector('.del'); if (del) del.onclick = () => deleteTrack(r.track.id);
     d.querySelector('.rec').onclick = () => {
       if (!S.rec) startRecording(r.track.id);
       else if (S.rec.trackId === r.track.id) stopRecording();
@@ -628,6 +639,19 @@ function afterStructureChange() {
   $('seqInfo').textContent = `${P().settings.width}×${P().settings.height} · ${+P().settings.fps.toFixed(3)} fps`;
 }
 function updateUndoButtons() { $('undoBtn').disabled = !S.undo.length; $('redoBtn').disabled = !S.redo.length; }
+
+// Delete a track and its clips (undoable). A timeline keeps at least one video and one audio track.
+function deleteTrack(id) {
+  const t = trackById(id); if (!t) return;
+  if (S.rec && S.rec.trackId === id) return toast('Stop recording on this track first', true);
+  if (P().tracks.filter((x) => x.kind === t.kind).length <= 1) return toast(`A timeline needs at least one ${t.kind} track`);
+  const n = P().clips.filter((c) => c.trackId === id).length;
+  mutate(`Delete track ${t.name}`, () => {
+    P().tracks = P().tracks.filter((x) => x.id !== id);
+    P().clips = P().clips.filter((c) => c.trackId !== id);
+  });
+  toast(`Deleted ${t.name}${n ? ` and its ${n} clip${n > 1 ? 's' : ''}` : ''} (⌘Z to undo)`);
+}
 
 // Remove whatever is under [s, e) on a track, trimming or splitting neighbours.
 function overwrite(trackId, s, e, exclude) {
@@ -1010,7 +1034,7 @@ function markDirty() {
   clearTimeout(S.saveTimer); S.saveTimer = setTimeout(save, 350);
 }
 function projectBody(rev) {
-  return { ...P(), rev, ui: { playhead: S.playhead, zoom: S.zoom, scroll: S.scroll, snap: S.snap, linked: S.linked, push: S.pushMode } };
+  return { ...P(), rev, ui: { playhead: S.playhead, zoom: S.zoom, scroll: S.scroll, snap: S.snap, linked: S.linked, push: S.pushMode, ...(S.tlHeight ? { tlHeight: S.tlHeight } : {}) } };
 }
 async function save({ snapshot } = {}) {
   if (!P()) return;
@@ -1796,10 +1820,8 @@ function wireTimeline() {
     e.preventDefault();
     const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? cv.clientHeight : 1; // lines/pages → px
     const dx = e.deltaX * unit, dy = e.deltaY * unit;
-    if (e.altKey) {
-      const overflow = layout().contentH - cv.clientHeight;
-      if (overflow > 0) { S.vscroll = clamp(S.vscroll + dy, 0, overflow); renderTrackHeads(); }
-    } else if (e.shiftKey || Math.abs(dx) > Math.abs(dy)) {
+    if (e.altKey) { scrollTracks(dy); return; }
+    else if (e.shiftKey || Math.abs(dx) > Math.abs(dy)) {
       S.scroll = Math.max(0, S.scroll + (e.shiftKey && !dx ? dy : dx) / S.zoom);
     } else {
       zoomAroundPlayhead(S.zoom * Math.exp(-dy * (e.ctrlKey ? 0.01 : 0.002))); return;
@@ -1816,6 +1838,31 @@ function updateScrollbar(viewW) {
   const tw = Math.max(24, (visible / total) * W);
   thumb.style.width = tw + 'px';
   thumb.style.left = Math.min(W - tw, (S.scroll / total) * W) + 'px';
+}
+// The timeline panel's height: drag the strip along its top edge (double-click
+// it for the default). Saved with the project's view.
+function setTimelineHeight(h) {
+  const app = document.querySelector('.app'); if (!app) return;
+  if (h) h = Math.round(clamp(h, 140, window.innerHeight - 220));
+  S.tlHeight = h || null;
+  if (h) app.style.setProperty('--timeline-height', h + 'px'); else app.style.removeProperty('--timeline-height');
+  if (P()) { renderTrackHeads(); requestRender(); }
+}
+function wireTimelineResize() {
+  const grip = $('tlResize'); let drag = null;
+  grip.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return; e.preventDefault(); grip.setPointerCapture(e.pointerId);
+    drag = { y0: e.clientY, h0: $('timelinePanel').getBoundingClientRect().height };
+  });
+  grip.addEventListener('pointermove', (e) => { if (drag) setTimelineHeight(drag.h0 + drag.y0 - e.clientY); });
+  const done = () => { if (drag) { drag = null; S.uiDirty = true; } };
+  grip.addEventListener('pointerup', done); grip.addEventListener('pointercancel', done);
+  grip.addEventListener('dblclick', () => { setTimelineHeight(null); S.uiDirty = true; });
+  // Scrolling over the track names moves through the tracks.
+  $('trackHeads').addEventListener('wheel', (e) => {
+    e.preventDefault();
+    scrollTracks((e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? $('tlCanvas').clientHeight : 1) * (e.deltaY || e.deltaX));
+  }, { passive: false });
 }
 function wireScrollbar() {
   const bar = $('tlScroll'), thumb = $('tlThumb');
@@ -2020,6 +2067,7 @@ async function openProject(slug) {
     source: { mediaId: null, clipId: null, t: 0 },
   });
   $('snapBtn').checked = S.snap; $('linkBtn').checked = S.linked; setPushMode(S.pushMode, { restoring: true });
+  setTimelineHeight(p.ui?.tlHeight || null);
   p.name = p.name || slug; // a project folder's name stands in if the file lost its own
   $('projectName').textContent = p.name; document.title = `${p.name} — Cutroom`;
   history.replaceState(null, '', `?p=${enc(slug)}`);
@@ -2191,7 +2239,7 @@ async function boot() {
   const pool = document.createElement('div'); pool.id = 'videoPool';
   pool.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;overflow:hidden;opacity:0.01;pointer-events:none;';
   document.body.append(pool);
-  readTheme(); wireChrome(); wireTimeline(); wireScrollbar(); wireSource(); wireKeys(); focusPanel('program');
+  readTheme(); wireChrome(); wireTimeline(); wireScrollbar(); wireTimelineResize(); wireSource(); wireKeys(); focusPanel('program');
   S.info = await api('GET', '/api/info');
   const want = new URLSearchParams(location.search).get('p');
   const list = await api('GET', '/api/projects');

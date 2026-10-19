@@ -5,6 +5,7 @@ import { TimelineSwitcher } from './Timelines';
 export default function Timeline() {
   return (
     <section className="timeline-panel" id="timelinePanel" tabIndex={0}>
+      <div className="timeline-resize" id="tlResize" title="Drag to make the timeline taller or shorter · double-click to reset"></div>
       <div className="timeline-toolbar">
         <TimelineSwitcher />
         <span className="sep"></span>

@@ -16,7 +16,7 @@ body {
 .app {
   height: 100%;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) minmax(0, var(--height-10xl));
+  grid-template-rows: auto minmax(0, 1fr) minmax(0, var(--timeline-height, var(--height-10xl)));
 }
 button, input, select { font: inherit; color: inherit; }
 code { font-family: var(--font-mono); }
@@ -92,7 +92,7 @@ code { font-family: var(--font-mono); }
 
 /* ------------------------------------------------------------ timeline */
 .timeline-panel {
-  display: flex; flex-direction: column; min-height: 0; outline: none;
+  position: relative; display: flex; flex-direction: column; min-height: 0; outline: none;
   margin: 0 var(--spacing-md) var(--spacing-md);
   background: var(--cb-surface-card-bg); border-radius: var(--radius-xl); box-shadow: var(--cb-surface-card-shadow);
   overflow: hidden;
@@ -112,6 +112,12 @@ code { font-family: var(--font-mono); }
   padding: 0 var(--spacing-xs) 0 var(--spacing-md); color: var(--cb-surface-001-text);
 }
 .track-head .tname { flex: 1; }
+.track-head .del { opacity: 0; }
+.track-head:hover .del, .track-head .del:focus-visible { opacity: 1; }
+/* Grip along the timeline panel's top edge for resizing it (engine: wireTimelineResize). */
+.timeline-resize { position: absolute; top: 0; left: var(--spacing-xl); right: var(--spacing-xl); height: var(--spacing-xs); cursor: ns-resize; z-index: 1; touch-action: none; }
+.timeline-resize::after { content: ""; position: absolute; left: 50%; top: var(--spacing-3xs); width: var(--width-xs); height: var(--border-md); margin-left: calc(var(--width-xs) / -2); border-radius: var(--radius-full); background: var(--cb-surface-plot-border); transition: var(--motion-transition); }
+.timeline-resize:hover::after { background: var(--cb-brand-bg); }
 .timeline-canvas-wrap { flex: 1; position: relative; min-width: 0; }
 .timeline-scroll-row { display: flex; padding: var(--spacing-3xs) var(--spacing-md) var(--spacing-xs) 0; }
 .timeline-scroll-gap { width: var(--width-sm); flex: none; }
