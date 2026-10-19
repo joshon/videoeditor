@@ -473,6 +473,8 @@ function renderTimeline() {
     }
   });
 
+  if (S.trackDropY != null) { ctx.fillStyle = C.select; ctx.fillRect(0, S.trackDropY - C.line / 2, w, C.line); }
+
   // The take being recorded, growing from where it started to the playhead.
   if (S.rec && S.rec.startedWall) {
     const r = rows.find((row) => row.track.id === S.rec.trackId);
@@ -606,6 +608,8 @@ function renderTrackHeads() {
     d.querySelector('input').onchange = () => mutate(isV ? 'Toggle track visibility' : 'Toggle mute', () => {
       const t = trackById(r.track.id); if (isV) t.hidden = !t.hidden; else t.muted = !t.muted;
     });
+    d.title = 'Drag to reorder · click to select every clip on this track';
+    d.addEventListener('pointerdown', (e) => { if (e.button === 0 && !e.target.closest('button, label, input')) beginTrackDrag(e, r.track.id, d); });
     el.append(d);
   }
 }
@@ -639,6 +643,44 @@ function afterStructureChange() {
   $('seqInfo').textContent = `${P().settings.width}×${P().settings.height} · ${+P().settings.fps.toFixed(3)} fps`;
 }
 function updateUndoButtons() { $('undoBtn').disabled = !S.undo.length; $('redoBtn').disabled = !S.redo.length; }
+
+// Drag a track by its label to reorder it among tracks of its kind (video
+// stays above audio; the top video track is the top layer). A click without a
+// drag selects every clip on the track.
+function beginTrackDrag(e, id, el) {
+  const t = trackById(id); if (!t) return;
+  el.setPointerCapture(e.pointerId);
+  const y0 = e.clientY; let moved = false; let to = null;
+  const top = () => $('trackHeads').getBoundingClientRect().top;
+  const move = (ev) => {
+    if (!moved && Math.abs(ev.clientY - y0) < 4) return;
+    moved = true; el.classList.add('dragging'); el.style.transform = `translateY(${ev.clientY - y0}px)`;
+    const y = ev.clientY - top();
+    const same = layout().rows.filter((r) => r.track.kind === t.kind);
+    to = same.filter((r) => y > r.y + r.h / 2).length; // insertion index among same-kind tracks
+    const at = to < same.length ? same[to].y - 2 : same[same.length - 1].y + same[same.length - 1].h + 1;
+    S.trackDropY = at; requestRender('timeline');
+  };
+  const up = () => {
+    el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
+    S.trackDropY = null; el.classList.remove('dragging'); el.style.transform = '';
+    if (!moved) {
+      const clips = P().clips.filter((c) => c.trackId === id);
+      setSelection(clips); S.lastClicked = clips[0]?.id;
+      if (clips.length) toast(`Selected ${clips.length} clip${clips.length > 1 ? 's' : ''} on ${t.name}`);
+      return;
+    }
+    const order = P().tracks.filter((x) => x.kind === t.kind).map((x) => x.id);
+    const from = order.indexOf(id); order.splice(from, 1); order.splice(to > from ? to - 1 : to, 0, id);
+    mutate(`Move track ${t.name}`, () => {
+      const byId = Object.fromEntries(P().tracks.map((x) => [x.id, x]));
+      const rest = P().tracks.filter((x) => x.kind !== t.kind);
+      const mine = order.map((x) => byId[x]);
+      P().tracks = t.kind === 'video' ? [...mine, ...rest] : [...rest, ...mine];
+    });
+  };
+  el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+}
 
 // Delete a track and its clips (undoable). A timeline keeps at least one video and one audio track.
 function deleteTrack(id) {
@@ -758,9 +800,10 @@ function deleteSelected(ripple) {
 // selected video-track clip through 'cutroom:clip' and asks for changes with
 // 'cutroom:clip-edit' { id, patch: { frame?, zoom?, text? }, label }. A patch
 // value of null removes that setting.
+function selectedVideoClips() { return P().clips.filter((c) => S.selection.has(c.id) && trackById(c.trackId)?.kind === 'video'); }
 function inspectedClip() {
   if (!P()) return null;
-  const vids = P().clips.filter((c) => S.selection.has(c.id) && trackById(c.trackId)?.kind === 'video');
+  const vids = selectedVideoClips();
   return vids.find((c) => c.id === S.lastClicked) || vids[0] || null;
 }
 let lastEmitted = '';
@@ -769,6 +812,7 @@ function emitClip() {
   const detail = {
     slug: S.slug, seq: P() ? { width: P().settings.width, height: P().settings.height } : null,
     clip: c ? clone(c) : null, track: c ? trackById(c.trackId).name : null,
+    count: c ? selectedVideoClips().filter((o) => isText(o) === isText(c)).length : 0,
     media: m ? { name: m.name, width: m.width, height: m.height } : null,
   };
   const sig = JSON.stringify(detail); if (sig === lastEmitted) return;
@@ -782,9 +826,14 @@ function editClip({ id, patch, label = 'Edit clip' }) {
   const key = id + '|' + label; const now = performance.now();
   const merge = S.lastEdit && S.lastEdit.key === key && now - S.lastEdit.at < 1500 && S.undo[S.undo.length - 1] === S.lastEdit.entry;
   const before = merge ? null : editState();
+  // Reframing and zoom apply to every selected clip of the same sort (all the
+  // camera clips at once, say); a card's text applies only to that card.
+  const targets = [c, ...(S.selection.has(id) ? selectedVideoClips().filter((o) => o !== c && isText(o) === isText(c)) : [])];
   for (const k of ['frame', 'zoom', 'text']) {
-    if (patch[k] === null) delete c[k];
-    else if (patch[k]) c[k] = { ...(c[k] || {}), ...patch[k] };
+    for (const t of k === 'text' ? [c] : targets) {
+      if (patch[k] === null) delete t[k];
+      else if (patch[k]) t[k] = { ...(t[k] || {}), ...patch[k] };
+    }
   }
   if (before) {
     if (before === editState()) return;

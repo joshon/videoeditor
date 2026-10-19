@@ -162,7 +162,7 @@ function TextControls({ clip, seq }) {
 
 export default function Inspector() {
   const [open, setOpen] = useState(false);
-  const { clip, media, seq, track } = useClip();
+  const { clip, media, seq, track, count } = useClip();
   useEffect(() => {
     const show = () => setOpen(true), hide = () => setOpen(false);
     window.addEventListener('cutroom:show-inspector', show);
@@ -188,7 +188,10 @@ export default function Inspector() {
           </Text>
         )}
         {clip && (
-          <Text variant="body-small" color="muted">{isText ? 'Text card' : media?.name || 'Clip'} · {track}</Text>
+          <Text variant="body-small" color="muted">
+            {isText ? 'Text card' : media?.name || 'Clip'} · {track}
+            {!isText && count > 1 ? ` · position, size and zoom apply to all ${count} selected clips` : ''}
+          </Text>
         )}
         {clip && isText && seq && <TextControls key={clip.id} clip={clip} seq={seq} />}
         {clip && !isText && media && seq && <MediaControls key={clip.id} clip={clip} media={media} seq={seq} />}

@@ -112,6 +112,8 @@ code { font-family: var(--font-mono); }
   padding: 0 var(--spacing-xs) 0 var(--spacing-md); color: var(--cb-surface-001-text);
 }
 .track-head .tname { flex: 1; }
+.track-head { cursor: grab; }
+.track-head.dragging { cursor: grabbing; z-index: 2; background: var(--cb-surface-menu-bg); border-radius: var(--radius-md); box-shadow: var(--cb-surface-card-shadow); }
 .track-head .del { opacity: 0; }
 .track-head:hover .del, .track-head .del:focus-visible { opacity: 1; }
 /* Grip along the timeline panel's top edge for resizing it (engine: wireTimelineResize). */
