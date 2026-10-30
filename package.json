@@ -6,14 +6,73 @@
   "scripts": {
     "dev": "PORT=4700 node server.js",
     "build": "next build",
-    "start": "NODE_ENV=production PORT=4700 node server.js"
+    "start": "NODE_ENV=production PORT=4700 node server.js",
+    "app": "next build && electron .",
+    "dist": "next build && electron-builder --mac --arm64"
   },
   "engines": {
     "node": ">=20.9"
   },
   "dependencies": {
-    "next": "^16.4.0",
+    "@ffprobe-installer/ffprobe": "^2.1.2",
+    "ffmpeg-static": "^5.3.0",
+    "next": "^16.4.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "electron": "^41.7.1",
+    "electron-builder": "^26.18.0"
+  },
+  "main": "desktop/main.js",
+  "build": {
+    "appId": "org.betterstatistics.cutroom",
+    "productName": "Cutroom",
+    "copyright": "Joshon",
+    "directories": {
+      "output": "dist",
+      "buildResources": "desktop/resources"
+    },
+    "asar": false,
+    "files": [
+      "package.json",
+      "server.js",
+      "next.config.mjs",
+      "desktop/main.js",
+      "app/**/*",
+      "design-system/**/*",
+      "build/**/*",
+      ".next/**/*",
+      "!.next/cache/**/*",
+      "!.next/dev/**/*",
+      "!.next/trace*",
+      "!projects/**/*",
+      "!dist/**/*",
+      "!models/**/*",
+      "!node_modules/@next/swc-*/**/*",
+      "!node_modules/@img/**/*",
+      "!node_modules/sharp/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.video",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "desktop/resources/icon.icns",
+      "extendInfo": {
+        "NSCameraUsageDescription": "Cutroom records from your camera onto timeline tracks when you press record.",
+        "NSMicrophoneUsageDescription": "Cutroom records from your microphone onto timeline tracks when you press record."
+      },
+      "identity": "-",
+      "hardenedRuntime": false
+    },
+    "dmg": {
+      "title": "Cutroom"
+    }
   }
 }

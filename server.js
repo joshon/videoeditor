@@ -777,3 +777,6 @@ nextApp.prepare().then(() => {
     console.log(`Projects folder: ${PROJECTS_DIR}`);
   });
 });
+
+// For the Mac app (desktop/main.js): it asks before quitting during an export.
+module.exports = { runningExports: () => [...jobs.values()].filter((j) => j.status === 'running').length };

@@ -1122,6 +1122,8 @@ async function save({ snapshot } = {}) {
     if (S.saveAgain) { S.saveAgain = false; save(); }
   }
 }
+// The Mac app calls this before its window closes: finish a take, then save.
+window.__cutroomBeforeQuit = async () => { if (S.rec) await stopRecording(); await flushSave(); return true; };
 async function flushSave(opts) {
   while (S.saving) await new Promise((r) => setTimeout(r, 50));
   if (S.changeSeq !== S.savedSeq || (opts && opts.snapshot)) await save(opts);

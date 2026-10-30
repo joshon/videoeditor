@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Cutroom app icon: timeline clips under a playhead, on the macOS icon grid (824px tile). -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b2d31"/><stop offset="1" stop-color="#0e0f11"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" filter="url(#shadow)"/>
+  <rect x="100.5" y="100.5" width="823" height="823" rx="184.5" fill="none" stroke="#ffffff" stroke-opacity="0.08"/>
+  <!-- video clips -->
+  <rect x="190" y="300" width="300" height="120" rx="22" fill="#4f86d9"/>
+  <rect x="508" y="300" width="326" height="120" rx="22" fill="#6e9be3"/>
+  <rect x="190" y="446" width="420" height="120" rx="22" fill="#3a6fc2"/>
+  <!-- audio clip with a waveform -->
+  <rect x="300" y="604" width="534" height="120" rx="22" fill="#4caf6a"/>
+  <path d="M330 664 h20 M362 644 v40 M386 630 v68 M410 650 v28 M434 622 v84 M458 642 v44 M482 654 v20 M506 634 v60 M530 646 v36 M554 626 v76 M578 650 v28 M602 638 v52 M626 656 v16 M650 632 v64 M674 648 v32 M698 640 v48 M722 654 v20 M746 636 v56 M770 650 v28 M794 660 h16"
+        stroke="#1d5a30" stroke-width="10" stroke-linecap="round" fill="none"/>
+  <!-- playhead -->
+  <path d="M640 214 h64 l-32 40 z" fill="#ff4d3d"/>
+  <rect x="664" y="236" width="16" height="540" rx="8" fill="#ff4d3d"/>
+</svg>
